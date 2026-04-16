@@ -7,76 +7,189 @@
   </head>
   <body>
     <div class="app-container">
-      <!-- Top section: YouTube + Controls -->
-      <div class="top-section">
-        <!-- Left side: YouTube WebView -->
-        <div class="youtube-section">
-          <webview id="youtube-webview" src="https://www.youtube.com"></webview>
-        </div>
+      <!-- Tab Navigation -->
+      <div class="tab-navigation">
+        <button class="tab-btn active" data-tab="youtube-tab">YouTube Collector</button>
+        <button class="tab-btn" data-tab="downloader-tab">5-Sec Downloader</button>
+        <button class="tab-btn" data-tab="capcut-tab">CapCut Shuffle</button>
+      </div>
 
-        <!-- Right side: Controls and current row -->
-        <div class="right-panel">
-          <div class="control-panel">
-            <div class="panel-header">
-              <h2>Video Collector</h2>
+      <!-- Tab 1: YouTube Video Collector -->
+      <div id="youtube-tab" class="tab-content active">
+        <div class="app-container">
+          <!-- Top section: YouTube + Controls -->
+          <div class="top-section">
+            <!-- Left side: YouTube WebView -->
+            <div class="youtube-section">
+              <webview id="youtube-webview" src="https://www.youtube.com"></webview>
             </div>
 
-            <!-- Current URL Display -->
-            <div class="url-display">
-              <label>Current URL:</label>
-              <input type="text" id="current-url" readonly />
-            </div>
+            <!-- Right side: Controls and current row -->
+            <div class="right-panel">
+              <div class="control-panel">
+                <div class="panel-header">
+                  <h2>Video Collector</h2>
+                </div>
 
-            <!-- Marker List (Scrollable) -->
-            <div class="markers-section">
-              <div class="section-header">
-                <h3>Markers (Press N to add)</h3>
-                <button id="undo-btn" class="small-btn" title="Undo last marker">↶</button>
+                <!-- Current URL Display -->
+                <div class="url-display">
+                  <label>Current URL:</label>
+                  <input type="text" id="current-url" readonly />
+                </div>
+
+                <!-- Marker List (Scrollable) -->
+                <div class="markers-section">
+                  <div class="section-header">
+                    <h3>Markers (Press N to add)</h3>
+                    <button id="undo-btn" class="small-btn" title="Undo last marker">↶</button>
+                  </div>
+                  <div id="markers-list" class="markers-list"></div>
+                </div>
+
+                <!-- Button Group -->
+                <div class="button-group">
+                  <button id="take-url-btn" class="action-btn">Take URL + Markers</button>
+                  <button id="next-row-btn" class="action-btn">Next Row</button>
+                  <button id="export-btn" class="action-btn primary">Export CSV</button>
+                </div>
+
+                <!-- Current Row Display -->
+                <div class="current-row-section">
+                  <div class="current-row-header">
+                    <h3>Current Row:</h3>
+                    <button id="clear-row-btn" class="small-btn" title="Clear current row">🗑️</button>
+                  </div>
+                  <div id="current-row-display" class="row-display"></div>
+                </div>
+
+                <!-- Status -->
+                <div class="status-section">
+                  <p>Total Rows: <span id="row-count">0</span> | Markers: <span id="marker-count">0</span></p>
+                </div>
               </div>
-              <div id="markers-list" class="markers-list"></div>
             </div>
+          </div>
 
-            <!-- Button Group -->
-            <div class="button-group">
-              <button id="take-url-btn" class="action-btn">Take URL + Markers</button>
-              <button id="next-row-btn" class="action-btn">Next Row</button>
-              <button id="export-btn" class="action-btn primary">Export CSV</button>
-            </div>
-
-            <!-- Current Row Display -->
-            <div class="current-row-section">
-              <div class="current-row-header">
-                <h3>Current Row:</h3>
-                <button id="clear-row-btn" class="small-btn" title="Clear current row">🗑️</button>
-              </div>
-              <div id="current-row-display" class="row-display"></div>
-            </div>
-
-            <!-- Status -->
-            <div class="status-section">
-              <p>Total Rows: <span id="row-count">0</span> | Markers: <span id="marker-count">0</span></p>
+          <!-- Bottom section: Rows Grid Table (Full Width, Scrollable) -->
+          <div class="rows-grid-section">
+            <h3>Collected Rows:</h3>
+            <div id="rows-grid-container" class="rows-grid-container">
+              <table id="rows-grid" class="rows-grid">
+                <thead>
+                  <tr>
+                    <th>Row</th>
+                    <th>URL / Timestamps</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Bottom section: Rows Grid Table (Full Width, Scrollable) -->
-      <div class="rows-grid-section">
-        <h3>Collected Rows:</h3>
-        <div id="rows-grid-container" class="rows-grid-container">
-          <table id="rows-grid" class="rows-grid">
-            <thead>
-              <tr>
-                <th>Row</th>
-                <th>URL / Timestamps</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+      <!-- Tab 2: 5-Sec Downloader -->
+      <div id="downloader-tab" class="tab-content">
+        <div class="tool-container">
+          <h1>5-Sec Downloader</h1>
+          
+          <!-- CSV Selector -->
+          <div class="form-section">
+            <label class="form-label">Input CSV:</label>
+            <div class="file-input-group">
+              <input type="text" id="csv-path" class="file-input" readonly placeholder="No file selected" />
+              <button id="csv-browse-btn" class="btn-secondary">Browse</button>
+            </div>
+          </div>
+
+          <!-- Output Folder Selector -->
+          <div class="form-section">
+            <label class="form-label">Output Folder:</label>
+            <div class="file-input-group">
+              <input type="text" id="output-path" class="file-input" readonly placeholder="No folder selected" />
+              <button id="output-browse-btn" class="btn-secondary">Browse</button>
+            </div>
+          </div>
+
+          <!-- Control Buttons -->
+          <div class="form-section button-row">
+            <button id="downloader-start-btn" class="btn-primary">Start</button>
+            <button id="downloader-stop-btn" class="btn-danger" disabled>Stop</button>
+            <button id="open-output-btn" class="btn-secondary">Open Output</button>
+          </div>
+
+          <!-- Log Area -->
+          <div class="log-section">
+            <label class="form-label">Log:</label>
+            <div id="downloader-log" class="log-output"></div>
+          </div>
+
+          <!-- Footer -->
+          <div class="tool-footer">
+            <span>© 2026 TranDucThang's 5-Sec Downloader</span>
+            <a href="#" id="fb-link-downloader">Facebook</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: CapCut Shuffle Track -->
+      <div id="capcut-tab" class="tab-content">
+        <div class="tool-container">
+          <h1>CapCut Project Shuffler</h1>
+
+          <!-- Folder Selection -->
+          <div class="form-section">
+            <label class="form-label" style="font-weight: bold;">CapCut Master Folder:</label>
+            <div class="file-input-group">
+              <input type="text" id="capcut-folder-path" class="file-input" readonly placeholder="No folder selected" />
+              <button id="capcut-browse-btn" class="btn-secondary">Browse</button>
+              <button id="capcut-refresh-btn" class="btn-secondary">Refresh</button>
+            </div>
+          </div>
+
+          <!-- Search Section -->
+          <div class="form-section">
+            <label class="form-label" style="font-weight: bold;">Search Projects:</label>
+            <input type="text" id="capcut-search-input" class="form-input" placeholder="Type to filter projects..." />
+          </div>
+
+          <!-- Projects List -->
+          <div class="form-section">
+            <label class="form-label" style="font-weight: bold;">Select Projects to Process:</label>
+            <div id="capcut-projects-list" class="projects-list"></div>
+          </div>
+
+          <!-- Cache Bust Option -->
+          <div class="form-section checkbox-section">
+            <label class="checkbox-label">
+              <input type="checkbox" id="capcut-cache-bust" checked />
+              Force CapCut cache refresh (rename folder & update metadata)
+            </label>
+          </div>
+
+          <!-- Process Button -->
+          <div class="form-section">
+            <button id="capcut-process-btn" class="btn-primary" style="width: 100%; padding: 15px; font-size: 16px;">
+              Process Selected Projects
+            </button>
+          </div>
+
+          <!-- Log Area -->
+          <div class="log-section">
+            <label class="form-label">Status:</label>
+            <div id="capcut-log" class="log-output"></div>
+          </div>
+
+          <!-- Footer -->
+          <div class="tool-footer">
+            <span>© 2026 TranDucThang's Clip Shuffler</span>
+            <a href="#" id="fb-link-capcut">Facebook</a>
+          </div>
         </div>
       </div>
     </div>
 
     <script src="renderer.js"></script>
+    <script src="tools-handler.js"></script>
   </body>
 </html>
