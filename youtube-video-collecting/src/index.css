@@ -13,10 +13,20 @@ body {
   background-color: #f5f5f5;
 }
 
-.main-container {
-  display: flex;
+.app-container {
+  display: grid;
   width: 100%;
   height: 100vh;
+  grid-template-rows: 1fr auto;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+/* Top Section: YouTube + Controls */
+.top-section {
+  display: flex;
+  width: 100%;
+  height: 100%;
   gap: 0;
 }
 
@@ -33,28 +43,30 @@ body {
   height: 100%;
 }
 
-/* Right Panel - Grid Layout */
+/* Right Panel - Controls Only */
 .right-panel {
   width: 400px;
   background-color: #ffffff;
   border-left: 1px solid #ddd;
-  display: grid;
-  grid-template-rows: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  overflow-y: auto;
 }
 
 /* Top Control Panel */
 .control-panel {
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  border-bottom: 2px solid #e0e0e0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .panel-header {
   padding: 16px;
   border-bottom: 2px solid #007acc;
   background-color: #f9f9f9;
+  flex-shrink: 0;
 }
 
 .panel-header h2 {
@@ -70,6 +82,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .url-display label {
@@ -96,7 +109,8 @@ body {
   border-bottom: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
-  max-height: 180px;
+  max-height: 350px;
+  flex-shrink: 0;
 }
 
 .section-header {
@@ -136,9 +150,11 @@ body {
 .markers-list {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-height: 0;
 }
 
 .marker-item {
@@ -155,6 +171,7 @@ body {
   align-items: center;
   user-select: none;
   transition: all 0.2s;
+  flex-shrink: 0;
 }
 
 .marker-item:hover {
@@ -184,6 +201,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .action-btn {
@@ -218,14 +236,66 @@ body {
   transform: translateY(0);
 }
 
-/* Rows Grid Section */
+/* Current Row Section */
+.current-row-section {
+  padding: 12px;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+
+.current-row-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.current-row-header h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.row-display {
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 11px;
+  font-family: monospace;
+  color: #666;
+  max-height: 80px;
+  overflow-y: auto;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.row-item {
+  margin-bottom: 4px;
+}
+
+/* Status Section */
+.status-section {
+  padding: 12px;
+  flex-shrink: 0;
+}
+
+.status-section p {
+  font-size: 12px;
+  color: #666;
+  margin: 4px 0;
+}
+
+/* Bottom Section: Rows Grid Table (Full Width, Scrollable) */
 .rows-grid-section {
   padding: 12px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   background-color: #f9f9f9;
   border-top: 2px solid #e0e0e0;
+  height: 300px;
+  flex-shrink: 0;
 }
 
 .rows-grid-section h3 {
@@ -233,6 +303,7 @@ body {
   font-weight: 600;
   color: #333;
   margin: 0 0 8px 0;
+  flex-shrink: 0;
 }
 
 .rows-grid-container {
@@ -256,12 +327,14 @@ body {
   background-color: #007acc;
   color: white;
   font-weight: 600;
+  z-index: 10;
 }
 
 .rows-grid thead th {
   padding: 6px 8px;
   text-align: left;
   border-bottom: 2px solid #0062cc;
+  white-space: nowrap;
 }
 
 .rows-grid tbody tr {
@@ -294,6 +367,7 @@ body {
   max-width: 50px;
   text-align: center;
   background-color: #f0f7ff;
+  white-space: nowrap;
 }
 
 .rows-grid .row-data {
@@ -301,51 +375,10 @@ body {
   word-break: break-all;
 }
 
-/* Current Row Section */
-.current-row-section {
-  padding: 12px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.current-row-section h3 {
-  font-size: 13px;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 8px;
-}
-
-.row-display {
-  background-color: #f9f9f9;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 8px;
-  font-size: 11px;
-  font-family: monospace;
-  color: #666;
-  max-height: 80px;
-  overflow-y: auto;
-  line-height: 1.4;
-  word-break: break-all;
-}
-
-.row-item {
-  margin-bottom: 4px;
-}
-
-/* Status Section */
-.status-section {
-  padding: 12px;
-}
-
-.status-section p {
-  font-size: 12px;
-  color: #666;
-  margin: 4px 0;
-}
-
 /* Scrollbar Styling */
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {

@@ -16,6 +16,7 @@ const takeUrlBtn = document.querySelector('#take-url-btn');
 const nextRowBtn = document.querySelector('#next-row-btn');
 const exportBtn = document.querySelector('#export-btn');
 const undoBtn = document.querySelector('#undo-btn');
+const clearRowBtn = document.querySelector('#clear-row-btn');
 const currentRowDisplay = document.querySelector('#current-row-display');
 const rowCountSpan = document.querySelector('#row-count');
 const markerCountSpan = document.querySelector('#marker-count');
@@ -28,6 +29,7 @@ takeUrlBtn.addEventListener('click', takeUrlAndMarkers);
 nextRowBtn.addEventListener('click', nextRow);
 exportBtn.addEventListener('click', exportCSV);
 undoBtn.addEventListener('click', undoMarker);
+clearRowBtn.addEventListener('click', clearCurrentRow);
 
 console.log('✅ Button listeners attached');
 
@@ -337,9 +339,9 @@ function formatMarkerTime(seconds) {
   const secs = Math.floor(seconds % 60);
   
   if (hours > 0) {
-    return `${hours}:${mins < 10 ? '0' : ''}${mins}.${secs < 10 ? '0' : ''}${secs}`;
+    return `${hours}.${mins < 10 ? '0' : ''}${mins}.${secs < 10 ? '0' : ''}${secs}`;
   }
-  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  return `${mins}.${secs < 10 ? '0' : ''}${secs}`;
 }
 
 // Undo last marker
@@ -348,6 +350,22 @@ function undoMarker() {
     markers.pop();
     updateMarkersDisplay();
   }
+}
+
+// Clear current row
+function clearCurrentRow() {
+  if (currentRow.length === 0) {
+    alert('Current row is already empty');
+    return;
+  }
+  
+  // Remove last URL + timestamps pair (2 elements)
+  if (currentRow.length >= 2) {
+    currentRow.pop(); // Remove timestamps
+    currentRow.pop(); // Remove URL
+  }
+  
+  updateCurrentRowDisplay();
 }
 
 // Take URL + Markers

@@ -6,71 +6,74 @@
     <link rel="stylesheet" href="index.css" />
   </head>
   <body>
-    <div class="main-container">
-      <!-- Left side: YouTube WebView -->
-      <div class="youtube-section">
-        <webview id="youtube-webview" src="https://www.youtube.com"></webview>
+    <div class="app-container">
+      <!-- Top section: YouTube + Controls -->
+      <div class="top-section">
+        <!-- Left side: YouTube WebView -->
+        <div class="youtube-section">
+          <webview id="youtube-webview" src="https://www.youtube.com"></webview>
+        </div>
+
+        <!-- Right side: Controls and current row -->
+        <div class="right-panel">
+          <div class="control-panel">
+            <div class="panel-header">
+              <h2>Video Collector</h2>
+            </div>
+
+            <!-- Current URL Display -->
+            <div class="url-display">
+              <label>Current URL:</label>
+              <input type="text" id="current-url" readonly />
+            </div>
+
+            <!-- Marker List (Scrollable) -->
+            <div class="markers-section">
+              <div class="section-header">
+                <h3>Markers (Press N to add)</h3>
+                <button id="undo-btn" class="small-btn" title="Undo last marker">↶</button>
+              </div>
+              <div id="markers-list" class="markers-list"></div>
+            </div>
+
+            <!-- Button Group -->
+            <div class="button-group">
+              <button id="take-url-btn" class="action-btn">Take URL + Markers</button>
+              <button id="next-row-btn" class="action-btn">Next Row</button>
+              <button id="export-btn" class="action-btn primary">Export CSV</button>
+            </div>
+
+            <!-- Current Row Display -->
+            <div class="current-row-section">
+              <div class="current-row-header">
+                <h3>Current Row:</h3>
+                <button id="clear-row-btn" class="small-btn" title="Clear current row">🗑️</button>
+              </div>
+              <div id="current-row-display" class="row-display"></div>
+            </div>
+
+            <!-- Status -->
+            <div class="status-section">
+              <p>Total Rows: <span id="row-count">0</span> | Markers: <span id="marker-count">0</span></p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- Right side: Two-panel layout -->
-      <div class="right-panel">
-        
-        <!-- Top panel: Controls and current row -->
-        <div class="control-panel">
-          <div class="panel-header">
-            <h2>Video Collector</h2>
-          </div>
-
-          <!-- Current URL Display -->
-          <div class="url-display">
-            <label>Current URL:</label>
-            <input type="text" id="current-url" readonly />
-          </div>
-
-          <!-- Marker List (Scrollable) -->
-          <div class="markers-section">
-            <div class="section-header">
-              <h3>Markers (Press N to add)</h3>
-              <button id="undo-btn" class="small-btn" title="Undo last marker">↶</button>
-            </div>
-            <div id="markers-list" class="markers-list"></div>
-          </div>
-
-          <!-- Button Group -->
-          <div class="button-group">
-            <button id="take-url-btn" class="action-btn">Take URL + Markers</button>
-            <button id="next-row-btn" class="action-btn">Next Row</button>
-            <button id="export-btn" class="action-btn primary">Export CSV</button>
-          </div>
-
-          <!-- Current Row Display -->
-          <div class="current-row-section">
-            <h3>Current Row:</h3>
-            <div id="current-row-display" class="row-display"></div>
-          </div>
-
-          <!-- Status -->
-          <div class="status-section">
-            <p>Total Rows: <span id="row-count">0</span> | Markers: <span id="marker-count">0</span></p>
-          </div>
+      <!-- Bottom section: Rows Grid Table (Full Width, Scrollable) -->
+      <div class="rows-grid-section">
+        <h3>Collected Rows:</h3>
+        <div id="rows-grid-container" class="rows-grid-container">
+          <table id="rows-grid" class="rows-grid">
+            <thead>
+              <tr>
+                <th>Row</th>
+                <th>URL / Timestamps</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
         </div>
-
-        <!-- Bottom panel: Rows Grid Table -->
-        <div class="rows-grid-section">
-          <h3>Collected Rows:</h3>
-          <div id="rows-grid-container" class="rows-grid-container">
-            <table id="rows-grid" class="rows-grid">
-              <thead>
-                <tr>
-                  <th>Row</th>
-                  <th>URL / Timestamps</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </div>
-
       </div>
     </div>
 
