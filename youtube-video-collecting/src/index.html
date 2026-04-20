@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>YouTube Video Collector</title>
+    <title>Youtube Ultimate Tool</title>
     <link rel="stylesheet" href="index.css" />
   </head>
   <body>
@@ -11,6 +11,7 @@
       <div class="tab-navigation">
         <button class="tab-btn active" data-tab="youtube-tab">YouTube Collector</button>
         <button class="tab-btn" data-tab="downloader-tab">5-Sec Downloader</button>
+        <button class="tab-btn" data-tab="trimmer-tab">YouTube Trimmer</button>
         <button class="tab-btn" data-tab="capcut-tab">CapCut Shuffle</button>
       </div>
 
@@ -21,7 +22,15 @@
           <div class="top-section">
             <!-- Left side: YouTube WebView -->
             <div class="youtube-section">
-              <webview id="youtube-webview" src="https://www.youtube.com"></webview>
+              <!-- Navigation Toolbar -->
+              <div class="youtube-toolbar">
+                <button id="yt-back-btn" class="yt-nav-btn" title="Go back">←</button>
+                <button id="yt-forward-btn" class="yt-nav-btn" title="Go forward">→</button>
+                <button id="yt-refresh-btn" class="yt-nav-btn" title="Refresh page">⟳</button>
+                <input type="text" id="yt-url-field" class="yt-url-input" readonly placeholder="Loading..." />
+              </div>
+              <!-- YouTube WebView -->
+              <webview id="youtube-webview" src="https://www.youtube.com" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation"></webview>
             </div>
 
             <!-- Right side: Controls and current row -->
@@ -40,7 +49,7 @@
                 <!-- Marker List (Scrollable) -->
                 <div class="markers-section">
                   <div class="section-header">
-                    <h3>Markers (Press N to add)</h3>
+                    <h3>Markers (Press , to add)</h3>
                     <button id="undo-btn" class="small-btn" title="Undo last marker">↶</button>
                   </div>
                   <div id="markers-list" class="markers-list"></div>
@@ -60,6 +69,9 @@
                     <button id="clear-row-btn" class="small-btn" title="Clear current row">🗑️</button>
                   </div>
                   <div id="current-row-display" class="row-display"></div>
+                  <div class="current-row-stats">
+                    <span>Total Timestamps: <strong id="current-row-timestamp-count">0</strong></span>
+                  </div>
                 </div>
 
                 <!-- Status -->
@@ -79,6 +91,7 @@
                   <tr>
                     <th>Row</th>
                     <th>URL / Timestamps</th>
+                    <th style="text-align: center; width: 80px;">TS Count</th>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -132,7 +145,113 @@
         </div>
       </div>
 
-      <!-- Tab 3: CapCut Shuffle Track -->
+      <!-- Tab 3: YouTube Trimmer -->
+      <div id="trimmer-tab" class="tab-content">
+        <div class="tool-container">
+          <h1>YouTube Trimmer</h1>
+
+          <!-- Output Folder Selector -->
+          <div class="form-section">
+            <label class="form-label">Output Folder:</label>
+            <div class="file-input-group">
+              <input type="text" id="trimmer-output-path" class="file-input" readonly placeholder="No folder selected" />
+              <button id="trimmer-output-browse-btn" class="btn-secondary">Browse</button>
+            </div>
+          </div>
+
+          <!-- YouTube URL Input -->
+          <div class="form-section">
+            <label class="form-label">YouTube URL:</label>
+            <div class="file-input-group">
+              <input type="text" id="trimmer-url-input" class="form-input" placeholder="Paste YouTube URL here..." />
+              <button id="trimmer-url-ok-btn" class="btn-secondary">OK</button>
+            </div>
+          </div>
+
+          <!-- Timestamps and Download - Horizontal Layout -->
+          <div class="trimmer-controls-row">
+            <!-- Start Timestamp -->
+            <div class="trimmer-timestamp-section">
+              <label class="form-label">Start Timestamp:</label>
+              <div class="timestamp-input-group">
+                <div class="timestamp-field">
+                  <label>HH</label>
+                  <input type="number" id="trimmer-start-hours" class="timestamp-input" min="0" max="23" value="0" />
+                </div>
+                <span class="timestamp-separator">:</span>
+                <div class="timestamp-field">
+                  <label>MM</label>
+                  <input type="number" id="trimmer-start-minutes" class="timestamp-input" min="0" max="59" value="0" />
+                </div>
+                <span class="timestamp-separator">:</span>
+                <div class="timestamp-field">
+                  <label>SS</label>
+                  <input type="number" id="trimmer-start-seconds" class="timestamp-input" min="0" max="59" value="0" />
+                </div>
+                <span class="timestamp-separator">.</span>
+                <div class="timestamp-field">
+                  <label>MS</label>
+                  <input type="number" id="trimmer-start-ms" class="timestamp-input" min="0" max="999" value="0" />
+                </div>
+              </div>
+            </div>
+
+            <!-- End Timestamp -->
+            <div class="trimmer-timestamp-section">
+              <label class="form-label">End Timestamp:</label>
+              <div class="timestamp-input-group">
+                <div class="timestamp-field">
+                  <label>HH</label>
+                  <input type="number" id="trimmer-end-hours" class="timestamp-input" min="0" max="23" value="0" />
+                </div>
+                <span class="timestamp-separator">:</span>
+                <div class="timestamp-field">
+                  <label>MM</label>
+                  <input type="number" id="trimmer-end-minutes" class="timestamp-input" min="0" max="59" value="0" />
+                </div>
+                <span class="timestamp-separator">:</span>
+                <div class="timestamp-field">
+                  <label>SS</label>
+                  <input type="number" id="trimmer-end-seconds" class="timestamp-input" min="0" max="59" value="0" />
+                </div>
+                <span class="timestamp-separator">.</span>
+                <div class="timestamp-field">
+                  <label>MS</label>
+                  <input type="number" id="trimmer-end-ms" class="timestamp-input" min="0" max="999" value="0" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Download Button -->
+            <div class="trimmer-download-section">
+              <label class="form-label">&nbsp;</label>
+              <button id="trimmer-download-btn" class="btn-primary" style="height: 44px;">Download Trimmed Video</button>
+            </div>
+          </div>
+
+          <!-- Video Preview WebView -->
+          <div class="form-section">
+            <label class="form-label">Video Player:</label>
+            <div class="trimmer-webview-container">
+              <webview id="trimmer-webview" src="about:blank" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation"></webview>
+            </div>
+          </div>
+
+          <!-- Log Area -->
+          <div class="log-section">
+            <label class="form-label">Log:</label>
+            <div id="trimmer-log" class="log-output"></div>
+          </div>
+
+          <!-- Footer -->
+          <div class="tool-footer">
+            <span>© 2026 TranDucThang's YouTube Trimmer</span>
+            <a href="#" id="fb-link-trimmer">Facebook</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 4: CapCut Shuffle Track -->
       <div id="capcut-tab" class="tab-content">
         <div class="tool-container">
           <h1>CapCut Project Shuffler</h1>

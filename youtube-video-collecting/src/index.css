@@ -349,6 +349,7 @@ body {
 .youtube-section {
   flex: 1;
   display: flex;
+  flex-direction: column;
   background-color: #000;
   overflow: hidden;
 }
@@ -356,6 +357,7 @@ body {
 #youtube-webview {
   width: 100%;
   height: 100%;
+  flex: 1;
 }
 
 /* Right Panel - Controls Only */
@@ -424,7 +426,7 @@ body {
   border-bottom: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
-  max-height: 350px;
+  max-height: 320px;
   flex-shrink: 0;
 }
 
@@ -590,6 +592,22 @@ body {
   margin-bottom: 4px;
 }
 
+.current-row-stats {
+  margin-top: 8px;
+  padding: 8px;
+  background-color: #e8f4f8;
+  border: 1px solid #b3dfe8;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #0c5460;
+  text-align: center;
+}
+
+.current-row-stats strong {
+  font-weight: 600;
+  color: #004085;
+}
+
 /* Status Section */
 .status-section {
   padding: 12px;
@@ -688,6 +706,210 @@ body {
 .rows-grid .row-data {
   overflow-wrap: break-word;
   word-break: break-all;
+}
+
+.rows-grid .row-timestamp-count {
+  font-weight: 600;
+  color: #16a34a;
+  background-color: #f0fdf4;
+  text-align: center;
+  min-width: 80px;
+  white-space: nowrap;
+  border-left: 2px solid #16a34a;
+}
+
+/* YouTube Navigation Toolbar */
+.youtube-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  align-items: center;
+}
+
+.yt-nav-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #ddd;
+  background-color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.yt-nav-btn:hover {
+  background-color: #e8e8e8;
+  border-color: #999;
+}
+
+.yt-nav-btn:active {
+  background-color: #ddd;
+}
+
+.yt-nav-btn:disabled {
+  background-color: #f5f5f5;
+  color: #ccc;
+  border-color: #e0e0e0;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.yt-nav-btn:disabled:hover {
+  background-color: #f5f5f5;
+  border-color: #e0e0e0;
+}
+
+.yt-url-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+  color: #333;
+  background-color: #fafafa;
+  min-width: 200px;
+  height: 36px;
+}
+
+.yt-url-input:focus {
+  outline: none;
+  border-color: #007acc;
+  background-color: #fff;
+}
+
+/* YouTube Trimmer Styles */
+.trimmer-webview-container {
+  width: 100%;
+  height: 600px;
+  background-color: #000;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #333;
+}
+
+webview#trimmer-webview {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* YouTube Trimmer URL Input */
+#trimmer-url-input {
+  flex: 1;
+  min-width: 300px;
+}
+
+/* YouTube Trimmer Horizontal Controls Row */
+.trimmer-controls-row {
+  padding: 16px 24px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.trimmer-timestamp-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trimmer-timestamp-section .form-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a5568;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.trimmer-download-section {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trimmer-download-section .form-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a5568;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+  visibility: hidden;
+  height: 16px;
+}
+
+/* Timestamp Input Group */
+.timestamp-input-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.timestamp-field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.timestamp-field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.timestamp-input {
+  width: 50px;
+  padding: 8px 4px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  background-color: #fff;
+  color: #2d3748;
+  text-align: center;
+}
+
+.timestamp-input:focus {
+  outline: none;
+  border-color: #007acc;
+  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+}
+
+.timestamp-input::-webkit-outer-spin-button,
+.timestamp-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.timestamp-input[type=number] {
+  -moz-appearance: textfield;
+}
+
+.timestamp-separator {
+  font-size: 18px;
+  font-weight: 600;
+  color: #4a5568;
+  margin-bottom: 6px;
+  width: 8px;
+  text-align: center;
 }
 
 /* Scrollbar Styling */

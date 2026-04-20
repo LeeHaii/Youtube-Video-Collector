@@ -29,9 +29,9 @@
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   }
 
-  // Listen for N key press
+  // Listen for comma key press to add marker
   document.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() === 'n' || e.key === 'N') {
+    if (e.key === ',') {
       const video = getVideoElement();
       if (video) {
         const currentTime = video.currentTime;

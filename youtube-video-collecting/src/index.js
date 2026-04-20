@@ -1,8 +1,10 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, session } = require('electron');
 const path = require('node:path');
 const fs = require('fs');
 const { spawn, execSync } = require('child_process');
 const os = require('os');
+const { ElectronBlocker } = require('@cliqz/adblocker-electron');
+const fetch = require('node-fetch');
 
 // Suppress MaxListenersExceededWarning
 require('events').EventEmitter.defaultMaxListeners = 15;
@@ -14,6 +16,28 @@ if (require('electron-squirrel-startup')) {
 
 // Store download process
 let downloadProcess = null;
+
+// ============================================================================
+// UBLOCK ORIGIN ADBLOCKER SETUP
+// ============================================================================
+
+let blocker = null;
+
+async function initializeAdblocker() {
+  try {
+    console.log('🔒 Initializing uBlock Origin adblocker...');
+    
+    // Create blocker instance with uBlock0 filters (ads + tracking)
+    blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch);
+    
+    console.log('✅ uBlock Origin loaded successfully');
+    return true;
+  } catch (error) {
+    console.warn('⚠️ Adblocker initialization warning (app will continue without ad-blocking):', error.message);
+    // Don't fail completely - app can work without adblocker
+    return false;
+  }
+}
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -63,8 +87,24 @@ const createWindow = () => {
   // and load the index.html of the app.
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
+  // Allow YouTube embeds - use minimal CSP that allows YouTube
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    const responseHeaders = { ...details.responseHeaders };
+    // Keep any existing CSP but make it more permissive for embeds
+    delete responseHeaders['content-security-policy'];
+    callback({ responseHeaders });
+  });
+
   // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  //mainWindow.webContents.openDevTools();
+
+  // Enable adblocker for this window
+  // DISABLED: uBlock causes issues with YouTube embeds (153 error)
+  // The adblocker was having issues anyway (fetch is not a function error)
+  // if (blocker) {
+  //   console.log('🔒 Enabling uBlock Origin for main window...');
+  //   blocker.enableBlockingInSession(mainWindow.webContents.session);
+  // }
 
   return mainWindow;
 };
@@ -74,7 +114,10 @@ let mainWindow;
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Initialize adblocker before creating window
+  await initializeAdblocker();
+  
   mainWindow = createWindow();
 
   // On OS X it's common to re-create a window in the app when the
@@ -378,5 +421,88 @@ ipcMain.handle('open-url', async (event, url) => {
 ipcMain.on('webview-message', (event, { channel, args }) => {
   // Forward messages from webview to renderer
   mainWindow.webContents.send(channel, ...args);
+});
+
+// YouTube Trimmer - Trim Video
+ipcMain.handle('trim-youtube-video', async (event, url, startSeconds, endSeconds, outputPath) => {
+  try {
+    // Verify output folder exists
+    if (!fs.existsSync(outputPath)) {
+      throw new Error('Output folder not found');
+    }
+
+    // Find Python executable
+    const pythonExe = findPythonExecutable();
+    if (!pythonExe) {
+      throw new Error('Python not found. Please install Python and add to PATH.');
+    }
+
+    // Get the path to the Python script
+    const pythonScriptPath = path.join(__dirname, '..', 'tools', 'youtube_trimmer.py');
+    
+    if (!fs.existsSync(pythonScriptPath)) {
+      throw new Error(`Python script not found: ${pythonScriptPath}`);
+    }
+
+    console.log(`✂️ Starting YouTube Trimmer with Python: ${pythonExe}`);
+    console.log(`📄 Script: ${pythonScriptPath}`);
+    console.log(`🎬 URL: ${url}`);
+    console.log(`⏱️ Trim: ${startSeconds}s to ${endSeconds}s`);
+    console.log(`📁 Output: ${outputPath}`);
+
+    // Spawn Python process
+    const trimProcess = spawn(pythonExe, [
+      pythonScriptPath,
+      url,
+      startSeconds.toString(),
+      endSeconds.toString(),
+      outputPath
+    ], {
+      stdio: 'pipe',
+      shell: false,
+      env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+    });
+
+    let trimmedFilePath = '';
+
+    return new Promise((resolve, reject) => {
+      trimProcess.stdout.on('data', (data) => {
+        const message = data.toString();
+        console.log(`[Trimmer stdout]: ${message}`);
+        mainWindow.webContents.send('trim-log', message);
+        
+        // Extract output filename from stdout
+        if (message.includes('OUTPUT_FILE:')) {
+          trimmedFilePath = message.split('OUTPUT_FILE:')[1].trim();
+        }
+      });
+
+      trimProcess.stderr.on('data', (data) => {
+        const message = data.toString();
+        console.error(`[Trimmer stderr]: ${message}`);
+        mainWindow.webContents.send('trim-log', `ERROR: ${message}`);
+      });
+
+      trimProcess.on('close', (code) => {
+        console.log(`✅ Trimmer process exited with code: ${code}`);
+        if (code === 0) {
+          resolve({
+            success: true,
+            filePath: trimmedFilePath || path.join(outputPath, 'trimmed_video.mp4')
+          });
+        } else {
+          reject(new Error(`Process exited with code ${code}`));
+        }
+      });
+
+      trimProcess.on('error', (error) => {
+        console.error(`❌ Failed to start trimmer: ${error.message}`);
+        reject(new Error(`Process failed to start: ${error.message}`));
+      });
+    });
+  } catch (error) {
+    console.error(`❌ Trimmer error: ${error.message}`);
+    return { success: false, error: error.message };
+  }
 });
 

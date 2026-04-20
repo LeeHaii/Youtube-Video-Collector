@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   scanCapcutProjects: (folderPath) => ipcRenderer.invoke('scan-capcut-projects', folderPath),
   processCapcutProjects: (projectPaths, cacheBust) => ipcRenderer.invoke('process-capcut-projects', projectPaths, cacheBust),
 
+  // YouTube Trimmer APIs
+  trimYouTubeVideo: (url, startSeconds, endSeconds, outputPath) => ipcRenderer.invoke('trim-youtube-video', url, startSeconds, endSeconds, outputPath),
+
   // Utility APIs
   openUrl: (url) => ipcRenderer.invoke('open-url', url),
 
@@ -31,6 +34,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onCapcutLog: (callback) => {
     ipcRenderer.on('capcut-log', (event, message) => callback(message));
+  },
+  onTrimLog: (callback) => {
+    ipcRenderer.on('trim-log', (event, message) => callback(message));
   },
 });
 

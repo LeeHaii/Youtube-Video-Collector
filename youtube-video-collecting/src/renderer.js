@@ -18,6 +18,7 @@ const exportBtn = document.querySelector('#export-btn');
 const undoBtn = document.querySelector('#undo-btn');
 const clearRowBtn = document.querySelector('#clear-row-btn');
 const currentRowDisplay = document.querySelector('#current-row-display');
+const currentRowTimestampCount = document.querySelector('#current-row-timestamp-count');
 const rowCountSpan = document.querySelector('#row-count');
 const markerCountSpan = document.querySelector('#marker-count');
 const rowsGrid = document.querySelector('#rows-grid tbody');
@@ -81,7 +82,7 @@ setInterval(() => {
 youtubeWebview.addEventListener('dom-ready', () => {
   console.log('✨ WebView DOM ready, injecting scripts...');
   injectScripts();
-  setupPolling();
+  // setupPolling(); // Already set up with setInterval below
   updateUrlDisplay();
   console.log('✨ Scripts injected successfully');
 });
@@ -91,12 +92,12 @@ function injectScripts() {
   // Inject a keydown listener into the YouTube page
   const keyListenerScript = `
     (function() {
-      console.log('[YouTube Page] Setting up N key listener...');
+      console.log('[YouTube Page] Setting up comma key listener...');
       
       // Use global document listener with capture phase
       document.addEventListener('keydown', function(e) {
-        if (e.key === 'n' || e.key === 'N') {
-          console.log('[YouTube Page] 🔴 N KEY PRESSED! e.key=' + e.key);
+        if (e.key === ',') {
+          console.log('[YouTube Page] 🔴 COMMA KEY PRESSED! e.key=' + e.key);
           e.preventDefault();
           e.stopPropagation();
           
@@ -125,13 +126,13 @@ function injectScripts() {
       
       // Also listen on window for extra coverage
       window.addEventListener('keydown', function(e) {
-        if (e.key === 'n' || e.key === 'N') {
-          console.log('[YouTube Page] (window) N key detected');
+        if (e.key === ',') {
+          console.log('[YouTube Page] (window) Comma key detected');
         }
       }, true);
       
       window.__youtubePageReady = true;
-      console.log('[YouTube Page] ✓ N key listener fully initialized');
+      console.log('[YouTube Page] ✓ Comma key listener fully initialized');
     })();
   `;
 
@@ -141,10 +142,35 @@ function injectScripts() {
   });
 }
 
-// Setup polling (now handled by setInterval above)
-function setupPolling() {
-  console.log('✅ Polling initialized (100ms interval)');
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Count timestamps in a semicolon-separated string
+ * e.g., "0.30;1.45;2.10" -> 3 timestamps
+ */
+function countTimestamps(timestampStr) {
+  if (!timestampStr || timestampStr.trim() === '') return 0;
+  return timestampStr.split(';').length;
 }
+
+/**
+ * Count total timestamps in a row (sum of all timestamp cells)
+ */
+function countTotalTimestamps(row) {
+  let total = 0;
+  // Row alternates: url, timestamps, url, timestamps...
+  // So timestamps are at odd indices (1, 3, 5, ...)
+  for (let i = 1; i < row.length; i += 2) {
+    total += countTimestamps(row[i]);
+  }
+  return total;
+}
+
+// ============================================================================
+// MARKER PROCESSING
+// ============================================================================
 
 // Process marker once detected
 function processMarker(videoData) {
@@ -412,6 +438,7 @@ function nextRow() {
 function updateCurrentRowDisplay() {
   if (currentRow.length === 0) {
     currentRowDisplay.innerHTML = '<span style="color: #999;">Empty</span>';
+    currentRowTimestampCount.textContent = '0';
     return;
   }
 
@@ -423,6 +450,10 @@ function updateCurrentRowDisplay() {
   });
 
   currentRowDisplay.innerHTML = items.join('');
+  
+  // Calculate and display total timestamps in current row
+  const totalTs = countTotalTimestamps(currentRow);
+  currentRowTimestampCount.textContent = totalTs;
 }
 
 // Update rows table display
@@ -454,6 +485,12 @@ function updateRowsTable() {
       tsCell.textContent = timestamps;
       tr.appendChild(tsCell);
     }
+    
+    // Add total timestamps count column
+    const totalCell = document.createElement('td');
+    totalCell.className = 'row-timestamp-count';
+    totalCell.textContent = countTotalTimestamps(row);
+    tr.appendChild(totalCell);
     
     rowsGrid.appendChild(tr);
   });
@@ -502,6 +539,434 @@ async function exportCSV() {
 // Periodic URL update
 setInterval(updateUrlDisplay, 3000);
 
+// ============================================================================
+// YOUTUBE NAVIGATION CONTROLS
+// ============================================================================
+
+const ytBackBtn = document.querySelector('#yt-back-btn');
+const ytForwardBtn = document.querySelector('#yt-forward-btn');
+const ytRefreshBtn = document.querySelector('#yt-refresh-btn');
+const ytUrlField = document.querySelector('#yt-url-field');
+
+// Function to update navigation button states
+function updateNavigationButtonStates() {
+  const canGoBack = youtubeWebview.canGoBack();
+  const canGoForward = youtubeWebview.canGoForward();
+  
+  ytBackBtn.disabled = !canGoBack;
+  ytForwardBtn.disabled = !canGoForward;
+  
+  console.log(`📍 Navigation state - Back: ${canGoBack}, Forward: ${canGoForward}`);
+}
+
+// Back button
+ytBackBtn.addEventListener('click', () => {
+  console.log('⬅️ Going back...');
+  youtubeWebview.goBack();
+  setTimeout(updateNavigationButtonStates, 300);
+});
+
+// Forward button
+ytForwardBtn.addEventListener('click', () => {
+  console.log('➡️ Going forward...');
+  youtubeWebview.goForward();
+  setTimeout(updateNavigationButtonStates, 300);
+});
+
+// Refresh button
+ytRefreshBtn.addEventListener('click', () => {
+  console.log('🔄 Refreshing page...');
+  youtubeWebview.reload();
+});
+
+// Update URL field when navigation occurs
+function updateYoutubeUrlField() {
+  try {
+    if (!youtubeWebview || typeof youtubeWebview.executeJavaScript !== 'function') {
+      console.warn('⚠️ WebView not ready or executeJavaScript not available');
+      return;
+    }
+    youtubeWebview
+      .executeJavaScript('window.location.href')
+      .then((url) => {
+        ytUrlField.value = url;
+      })
+      .catch(() => {
+        ytUrlField.value = 'Unable to load URL';
+      });
+  } catch (err) {
+    console.warn('⚠️ Error updating URL field:', err);
+  }
+}
+
+// Update on navigation events
+youtubeWebview.addEventListener('did-navigate', () => {
+  updateYoutubeUrlField();
+  setTimeout(updateNavigationButtonStates, 300);
+});
+
+youtubeWebview.addEventListener('did-navigate-in-page', () => {
+  updateYoutubeUrlField();
+  setTimeout(updateNavigationButtonStates, 300);
+});
+
+// Initial URL update and button state (wrapped in try-catch)
+try {
+  updateYoutubeUrlField();
+  setTimeout(updateNavigationButtonStates, 500);
+} catch (err) {
+  console.warn('⚠️ Error in initial URL update:', err);
+}
+
 console.log('🎬 YouTube Video Collector - Renderer initialized and ready!');
-console.log('📌 Press N to add markers');
+console.log('📌 Press , to add markers');
 console.log('🐛 Check console for debug messages');
+
+// ============================================================================
+// YOUTUBE TRIMMER CONTROLS
+// ============================================================================
+
+console.log('🔧🔧🔧 TRIMMER: Starting initialization...');
+
+// Initialize trimmer when document is ready
+function initTrimmer() {
+  console.log('🔧🔧🔧 TRIMMER: Initialization function called');
+  
+  // Query trimmer DOM elements with error checking
+  const trimmerOutputPath = document.querySelector('#trimmer-output-path');
+  const trimmerOutputBrowseBtn = document.querySelector('#trimmer-output-browse-btn');
+  const trimmerUrlInput = document.querySelector('#trimmer-url-input');
+  const trimmerUrlOkBtn = document.querySelector('#trimmer-url-ok-btn');
+  const trimmerWebview = document.querySelector('#trimmer-webview');
+
+  // Timestamp inputs (start)
+  const trimmerStartHours = document.querySelector('#trimmer-start-hours');
+  const trimmerStartMinutes = document.querySelector('#trimmer-start-minutes');
+  const trimmerStartSeconds = document.querySelector('#trimmer-start-seconds');
+  const trimmerStartMs = document.querySelector('#trimmer-start-ms');
+
+  // Timestamp inputs (end)
+  const trimmerEndHours = document.querySelector('#trimmer-end-hours');
+  const trimmerEndMinutes = document.querySelector('#trimmer-end-minutes');
+  const trimmerEndSeconds = document.querySelector('#trimmer-end-seconds');
+  const trimmerEndMs = document.querySelector('#trimmer-end-ms');
+
+  const trimmerDownloadBtn = document.querySelector('#trimmer-download-btn');
+  const trimmerLog = document.querySelector('#trimmer-log');
+
+  let currentTrimmerUrl = '';
+
+  // Verify all elements loaded
+  const trimmerElements = {
+    outputPath: trimmerOutputPath,
+    browseBtn: trimmerOutputBrowseBtn,
+    urlInput: trimmerUrlInput,
+    okBtn: trimmerUrlOkBtn,
+    webview: trimmerWebview,
+    startHours: trimmerStartHours,
+    startMinutes: trimmerStartMinutes,
+    startSeconds: trimmerStartSeconds,
+    startMs: trimmerStartMs,
+    endHours: trimmerEndHours,
+    endMinutes: trimmerEndMinutes,
+    endSeconds: trimmerEndSeconds,
+    endMs: trimmerEndMs,
+    downloadBtn: trimmerDownloadBtn,
+    log: trimmerLog,
+  };
+
+  let missingElements = [];
+  for (const [name, element] of Object.entries(trimmerElements)) {
+    if (!element) {
+      console.error(`❌ TRIMMER MISSING: ${name}`);
+      missingElements.push(name);
+    } else {
+      console.log(`✅ TRIMMER FOUND: ${name}`);
+    }
+  }
+
+  if (missingElements.length > 0) {
+    console.error('❌ TRIMMER FAILED - Missing elements:', missingElements);
+    return;
+  }
+  
+  console.log('✅ TRIMMER: All DOM elements loaded successfully');
+
+  // Helper function to append log messages
+  function appendTrimmerLog(message) {
+    if (!trimmerLog) return;
+    const timestamp = new Date().toLocaleTimeString();
+    const line = `[${timestamp}] ${message}`;
+    trimmerLog.textContent += line + '\n';
+    trimmerLog.scrollTop = trimmerLog.scrollHeight;
+    console.log(`📝 [TRIMMER LOG]: ${message}`);
+  }
+
+  // Validate and extract YouTube video ID
+  function extractYouTubeVideoId(url) {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+      /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+    ];
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) return match[1];
+    }
+    return null;
+  }
+
+  // Browse output folder
+  trimmerOutputBrowseBtn.addEventListener('click', async () => {
+    console.log('🟢🟢🟢 BROWSE BUTTON CLICKED 🟢🟢🟢');
+    appendTrimmerLog('📂 [BROWSE] Button clicked - attempting to open folder dialog');
+    
+    try {
+      console.log('🔵 Checking if window.electronAPI exists:', !!window.electronAPI);
+      console.log('🔵 Checking if openFolderDialog exists:', !!(window.electronAPI && window.electronAPI.openFolderDialog));
+      
+      if (!window.electronAPI) {
+        console.error('❌ ERROR: window.electronAPI does not exist');
+        appendTrimmerLog('❌ [ERROR] window.electronAPI not available');
+        return;
+      }
+      
+      if (!window.electronAPI.openFolderDialog) {
+        console.error('❌ ERROR: window.electronAPI.openFolderDialog does not exist');
+        appendTrimmerLog('❌ [ERROR] openFolderDialog not available');
+        return;
+      }
+      
+      console.log('✅ API available, calling openFolderDialog...');
+      appendTrimmerLog('⏳ [BROWSE] Waiting for folder dialog...');
+      
+      const result = await window.electronAPI.openFolderDialog();
+      console.log('✅✅✅ Browse dialog result:', result);
+      appendTrimmerLog(`✅ [BROWSE] Dialog returned: ${JSON.stringify(result)}`);
+      
+      if (result && result.folderPath) {
+        trimmerOutputPath.value = result.folderPath;
+        console.log('✅ Output path set to:', result.folderPath);
+        appendTrimmerLog(`✅ [BROWSE] Output folder set: ${result.folderPath}`);
+      } else {
+        console.log('⚠️ No folder selected or invalid result');
+        appendTrimmerLog('⚠️ [BROWSE] No folder selected');
+      }
+    } catch (err) {
+      console.error('❌ [ERROR] Browse error:', err);
+      console.error('Error stack:', err.stack);
+      appendTrimmerLog(`❌ [ERROR] ${err.message}`);
+    }
+  });
+
+  // URL OK button - Load video preview
+  trimmerUrlOkBtn.addEventListener('click', () => {
+    console.log('🟣🟣🟣 URL OK BUTTON CLICKED 🟣🟣🟣');
+    appendTrimmerLog('🎬 [URL OK] Button clicked');
+    
+    try {
+      const url = trimmerUrlInput.value.trim();
+      console.log('📝 URL input value:', url);
+      appendTrimmerLog(`📝 [URL OK] Input URL: ${url}`);
+      
+      if (!url) {
+        console.log('❌ URL is empty');
+        appendTrimmerLog('❌ [URL OK] URL input is empty');
+        return;
+      }
+
+      console.log('🔍 Extracting video ID from URL...');
+      const videoId = extractYouTubeVideoId(url);
+      console.log('🔍 Extracted video ID:', videoId);
+      appendTrimmerLog(`🔍 [URL OK] Extracted video ID: ${videoId}`);
+      
+      if (!videoId) {
+        console.log('❌ Could not extract video ID');
+        appendTrimmerLog('❌ [URL OK] Invalid YouTube URL format');
+        return;
+      }
+
+      currentTrimmerUrl = url;
+      
+      // Navigate webview to YouTube video
+      const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      console.log('🔵 Navigating webview to:', youtubeUrl);
+      appendTrimmerLog(`🎥 [URL OK] Loading video in webview: ${youtubeUrl}`);
+      
+      trimmerWebview.src = youtubeUrl;
+      
+      console.log('✅ Webview navigation initiated');
+      appendTrimmerLog(`✅ [URL OK] Video player loaded`);
+    } catch (err) {
+      console.error('❌ [ERROR] URL OK error:', err);
+      appendTrimmerLog(`❌ [ERROR] ${err.message}`);
+    }
+  });
+
+  // Helper to get timestamps in seconds
+  function getStartTimestamp() {
+    const h = parseInt(trimmerStartHours?.value || 0) || 0;
+    const m = parseInt(trimmerStartMinutes?.value || 0) || 0;
+    const s = parseInt(trimmerStartSeconds?.value || 0) || 0;
+    const ms = parseInt(trimmerStartMs?.value || 0) || 0;
+    return h * 3600 + m * 60 + s + ms / 1000;
+  }
+
+  function getEndTimestamp() {
+    const h = parseInt(trimmerEndHours?.value || 0) || 0;
+    const m = parseInt(trimmerEndMinutes?.value || 0) || 0;
+    const s = parseInt(trimmerEndSeconds?.value || 0) || 0;
+    const ms = parseInt(trimmerEndMs?.value || 0) || 0;
+    return h * 3600 + m * 60 + s + ms / 1000;
+  }
+
+  // Format timestamp for display
+  function formatTimestamp(h, m, s, ms) {
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+  }
+
+  // Auto-correct timestamp input values on input
+  const timestampInputs = [
+    trimmerStartHours, trimmerStartMinutes, trimmerStartSeconds, trimmerStartMs,
+    trimmerEndHours, trimmerEndMinutes, trimmerEndSeconds, trimmerEndMs
+  ];
+
+  // Set video currentTime when timestamp input changes (on blur)
+  function syncVideoTime(secondsToSeek) {
+    if (!trimmerWebview) return;
+    console.log(`⏱️ Setting video currentTime to ${secondsToSeek}s`);
+    trimmerWebview.executeJavaScript(`
+      (function() {
+        try {
+          const videos = document.querySelectorAll('video');
+          for (let v of videos) {
+            if (v.offsetParent !== null) {
+              v.currentTime = ${secondsToSeek};
+              console.log('✅ Video currentTime set to: ' + v.currentTime);
+              break;
+            }
+          }
+        } catch (e) {
+          console.error('Error setting video time:', e);
+        }
+      })();
+    `).catch(err => console.warn('⚠️ executeJavaScript failed:', err));
+  }
+
+  timestampInputs.forEach((input, index) => {
+    if (input) {
+      input.addEventListener('input', (e) => {
+        let val = parseInt(e.target.value) || 0;
+        
+        const maxValues = {
+          'trimmer-start-hours': 23, 'trimmer-end-hours': 23,
+          'trimmer-start-minutes': 59, 'trimmer-end-minutes': 59,
+          'trimmer-start-seconds': 59, 'trimmer-end-seconds': 59,
+          'trimmer-start-ms': 999, 'trimmer-end-ms': 999,
+        };
+        
+        const max = maxValues[e.target.id];
+        if (max !== undefined) {
+          val = Math.min(Math.max(val, 0), max);
+          e.target.value = val;
+        }
+      });
+      
+      // Sync video time on blur for start timestamps only
+      if (index < 4) {  // First 4 are start timestamps
+        input.addEventListener('blur', () => syncVideoTime(getStartTimestamp()));
+      }
+    }
+  });
+
+  // Download trimmed video
+  trimmerDownloadBtn.addEventListener('click', async () => {
+    console.log('🟠🟠🟠 DOWNLOAD BUTTON CLICKED 🟠🟠🟠');
+    appendTrimmerLog('⬇️ [DOWNLOAD] Button clicked');
+    
+    if (!currentTrimmerUrl) {
+      console.log('❌ No URL loaded');
+      appendTrimmerLog('❌ [DOWNLOAD] No video URL loaded - click OK button first');
+      return;
+    }
+
+    if (!trimmerOutputPath.value) {
+      console.log('❌ No output path selected');
+      appendTrimmerLog('❌ [DOWNLOAD] No output folder selected - use Browse button');
+      return;
+    }
+
+    const startSeconds = getStartTimestamp();
+    const endSeconds = getEndTimestamp();
+
+    if (startSeconds >= endSeconds) {
+      console.log('❌ Start time >= end time');
+      appendTrimmerLog('❌ [DOWNLOAD] Start time must be before end time');
+      return;
+    }
+
+    const startDisplay = formatTimestamp(
+      parseInt(trimmerStartHours?.value) || 0,
+      parseInt(trimmerStartMinutes?.value) || 0,
+      parseInt(trimmerStartSeconds?.value) || 0,
+      parseInt(trimmerStartMs?.value) || 0
+    );
+    
+    const endDisplay = formatTimestamp(
+      parseInt(trimmerEndHours?.value) || 0,
+      parseInt(trimmerEndMinutes?.value) || 0,
+      parseInt(trimmerEndSeconds?.value) || 0,
+      parseInt(trimmerEndMs?.value) || 0
+    );
+
+    try {
+      trimmerDownloadBtn.disabled = true;
+      console.log(`🚀 Starting trim: ${startDisplay} → ${endDisplay}`);
+      appendTrimmerLog(`🚀 [DOWNLOAD] Starting trim: ${startDisplay} → ${endDisplay}`);
+      
+      const result = await window.electronAPI.trimYouTubeVideo(
+        currentTrimmerUrl,
+        startSeconds,
+        endSeconds,
+        trimmerOutputPath.value
+      );
+
+      if (result.success) {
+        console.log('✅ Trim successful:', result.filePath);
+        appendTrimmerLog(`✅ [DOWNLOAD] Success! Video saved: ${result.filePath}`);
+      } else {
+        console.log('❌ Trim failed:', result.error);
+        appendTrimmerLog(`❌ [DOWNLOAD] Error: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('❌ [ERROR] Download error:', err);
+      console.error('Error stack:', err.stack);
+      appendTrimmerLog(`❌ [ERROR] ${err.message}`);
+    } finally {
+      trimmerDownloadBtn.disabled = false;
+    }
+  });
+
+  // Listen for trim log messages from main process
+  if (window.electronAPI && typeof window.electronAPI.onTrimLog === 'function') {
+    console.log('✅ Setting up onTrimLog listener');
+    window.electronAPI.onTrimLog((message) => {
+      console.log('📨 [IPC] Received trim log:', message);
+      appendTrimmerLog(message);
+    });
+  } else {
+    console.warn('⚠️ onTrimLog not available');
+  }
+  
+  console.log('✅ TRIMMER: All event listeners attached successfully');
+  console.log('✅ TRIMMER INITIALIZATION COMPLETE');
+  appendTrimmerLog('✅ YouTube Trimmer initialized and ready!');
+}
+
+// Call initTrimmer immediately when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initTrimmer);
+} else {
+  initTrimmer();
+}
