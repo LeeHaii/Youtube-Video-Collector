@@ -193,6 +193,149 @@ ipcMain.handle('open-folder-dialog', async (event) => {
   }
 });
 
+// YouTube Collector - Load Dialog (.rhymx or CSV)
+ipcMain.handle('open-load-dialog', async (event) => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [
+        { name: 'Supported Files', extensions: ['rhymx', 'csv'] },
+        { name: 'Autosave Files', extensions: ['rhymx'] },
+        { name: 'CSV Files', extensions: ['csv'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    return { filePath: result.filePaths[0] || null };
+  } catch (error) {
+    throw new Error(`Load dialog error: ${error.message}`);
+  }
+});
+
+// YouTube Collector - Load Row Data from File
+ipcMain.handle('load-row-data', async (event, filePath) => {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return { success: false, error: 'File not found' };
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+
+    if (ext === '.rhymx') {
+      // Load .rhymx autosave format (JSON)
+      const content = fs.readFileSync(filePath, 'utf8');
+      const data = JSON.parse(content);
+      return { success: true, type: 'rhymx', data };
+    } else if (ext === '.csv') {
+      // Parse CSV file - load rows with youtube URLs
+      const content = fs.readFileSync(filePath, 'utf8');
+      const lines = content.trim().split('\n');
+      const rows = [];
+
+      for (const line of lines) {
+        const cells = line.split(',');
+        // Check if row contains at least 1 URL with "yout" (youtube.com or youtu.be)
+        const hasYoutubeUrl = cells.some((cell) =>
+          cell.toLowerCase().includes('yout')
+        );
+
+        if (hasYoutubeUrl) {
+          rows.push(cells);
+        }
+      }
+
+      if (rows.length === 0) {
+        return {
+          success: false,
+          error: 'No rows with YouTube URLs found in CSV',
+        };
+      }
+
+      return { success: true, type: 'csv', data: rows };
+    } else {
+      return {
+        success: false,
+        error: 'Unsupported file format. Use .rhymx or .csv',
+      };
+    }
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// YouTube Collector - Auto-save to .rhymx
+ipcMain.handle('save-row-autosave', async (event, rows, currentRow) => {
+  try {
+    const tempDir = os.tmpdir();
+    const autosaveDir = path.join(tempDir, 'youtube-collector-autosaves');
+    
+    // Create autosave directory if it doesn't exist
+    if (!fs.existsSync(autosaveDir)) {
+      fs.mkdirSync(autosaveDir, { recursive: true });
+    }
+
+    // Generate filename with date and time
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    
+    const filename = `youtube-collector-autosave-${year}-${month}-${day}-${hours}-${minutes}-${seconds}.rhymx`;
+    const autosavePath = path.join(autosaveDir, filename);
+
+    const data = {
+      timestamp: new Date().toISOString(),
+      version: '1.0',
+      rows,
+      currentRow,
+    };
+
+    fs.writeFileSync(autosavePath, JSON.stringify(data, null, 2), 'utf8');
+    console.log('💾 Auto-saved to:', autosavePath);
+    return { success: true, filePath: autosavePath };
+  } catch (error) {
+    console.warn('⚠️ Auto-save failed:', error.message);
+    return { success: false, error: error.message };
+  }
+});
+
+// YouTube Collector - Get Autosave Path (returns most recent)
+ipcMain.handle('get-autosave-path', async (event) => {
+  try {
+    const tempDir = os.tmpdir();
+    const autosaveDir = path.join(tempDir, 'youtube-collector-autosaves');
+    
+    if (!fs.existsSync(autosaveDir)) {
+      return { success: true, path: autosaveDir, exists: false, mostRecent: null };
+    }
+
+    // Get all .rhymx files in the autosave directory
+    const files = fs.readdirSync(autosaveDir).filter(f => f.endsWith('.rhymx'));
+    
+    if (files.length === 0) {
+      return { success: true, path: autosaveDir, exists: false, mostRecent: null };
+    }
+
+    // Sort by filename (timestamp format ensures correct sort order)
+    files.sort((a, b) => b.localeCompare(a));
+    const mostRecentFile = files[0];
+    const mostRecentPath = path.join(autosaveDir, mostRecentFile);
+
+    return { 
+      success: true, 
+      path: autosaveDir, 
+      exists: true, 
+      mostRecent: mostRecentPath,
+      totalFiles: files.length,
+      files: files
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // 5-Sec Downloader - Start Download
 ipcMain.handle('start-download', async (event, csvPath, outputPath) => {
   try {

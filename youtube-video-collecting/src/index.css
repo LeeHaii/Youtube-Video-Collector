@@ -574,6 +574,11 @@ body {
   margin: 0;
 }
 
+.row-header-buttons {
+  display: flex;
+  gap: 8px;
+}
+
 .row-display {
   background-color: #f9f9f9;
   border: 1px solid #ddd;
@@ -637,6 +642,21 @@ body {
   color: #333;
   margin: 0 0 8px 0;
   flex-shrink: 0;
+}
+
+.rows-grid-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.rows-grid-header h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
 }
 
 .rows-grid-container {

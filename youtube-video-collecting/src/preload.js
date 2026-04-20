@@ -22,6 +22,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // YouTube Trimmer APIs
   trimYouTubeVideo: (url, startSeconds, endSeconds, outputPath) => ipcRenderer.invoke('trim-youtube-video', url, startSeconds, endSeconds, outputPath),
 
+  // YouTube Collector - Load/Save
+  openLoadDialog: () => ipcRenderer.invoke('open-load-dialog'),
+  loadRowData: (filePath) => ipcRenderer.invoke('load-row-data', filePath),
+  saveRowAutosave: (rows, currentRow) => ipcRenderer.invoke('save-row-autosave', rows, currentRow),
+  getAutosavePath: () => ipcRenderer.invoke('get-autosave-path'),
+
   // Utility APIs
   openUrl: (url) => ipcRenderer.invoke('open-url', url),
 

@@ -66,7 +66,9 @@
                 <div class="current-row-section">
                   <div class="current-row-header">
                     <h3>Current Row:</h3>
-                    <button id="clear-row-btn" class="small-btn" title="Clear current row">🗑️</button>
+                    <div class="row-header-buttons">
+                      <button id="clear-row-btn" class="small-btn" title="Clear current row">🗑️</button>
+                    </div>
                   </div>
                   <div id="current-row-display" class="row-display"></div>
                   <div class="current-row-stats">
@@ -84,7 +86,12 @@
 
           <!-- Bottom section: Rows Grid Table (Full Width, Scrollable) -->
           <div class="rows-grid-section">
-            <h3>Collected Rows:</h3>
+            <div class="rows-grid-header">
+              <h3>Collected Rows:</h3>
+              <div class="row-header-buttons">
+                      <button id="load-row-btn" class="small-btn" title="Load .rhymx or CSV file">📂 Load</button>
+                    </div>
+            </div>
             <div id="rows-grid-container" class="rows-grid-container">
               <table id="rows-grid" class="rows-grid">
                 <thead>

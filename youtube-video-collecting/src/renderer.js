@@ -22,6 +22,7 @@ const currentRowTimestampCount = document.querySelector('#current-row-timestamp-
 const rowCountSpan = document.querySelector('#row-count');
 const markerCountSpan = document.querySelector('#marker-count');
 const rowsGrid = document.querySelector('#rows-grid tbody');
+const loadRowBtn = document.querySelector('#load-row-btn');
 
 console.log('✅ DOM elements loaded');
 
@@ -31,6 +32,7 @@ nextRowBtn.addEventListener('click', nextRow);
 exportBtn.addEventListener('click', exportCSV);
 undoBtn.addEventListener('click', undoMarker);
 clearRowBtn.addEventListener('click', clearCurrentRow);
+loadRowBtn.addEventListener('click', loadRowData);
 
 console.log('✅ Button listeners attached');
 
@@ -535,6 +537,65 @@ async function exportCSV() {
     alert(`Error: ${err.message}`);
   }
 }
+
+// Load row data from .rhymx or CSV file
+async function loadRowData() {
+  try {
+    const result = await window.electronAPI.openLoadDialog();
+    
+    if (!result || !result.filePath) {
+      console.log('❌ No file selected');
+      return;
+    }
+
+    const filePath = result.filePath;
+    console.log('📂 Loading file:', filePath);
+
+    const loadResult = await window.electronAPI.loadRowData(filePath);
+    
+    if (!loadResult.success) {
+      console.error('❌ Load failed:', loadResult.error);
+      alert(`Failed to load file: ${loadResult.error}`);
+      return;
+    }
+
+    // Parse loaded data
+    const { data, type } = loadResult;
+    
+    if (type === 'rhymx') {
+      // Load from .rhymx autosave format
+      console.log('✅ Loaded .rhymx autosave file');
+      rows = data.rows || [];
+      currentRow = data.currentRow || [];
+    } else if (type === 'csv') {
+      // Load from CSV format
+      console.log('✅ Loaded CSV file');
+      rows = data;
+      currentRow = [];
+    }
+
+    // Update all displays
+    updateCurrentRowDisplay();
+    updateRowsTable();
+    console.log(`✅ Loaded ${rows.length} rows`);
+    alert(`Successfully loaded ${rows.length} rows!`);
+  } catch (err) {
+    console.error('❌ Load error:', err);
+    alert(`Error loading file: ${err.message}`);
+  }
+}
+
+// Auto-save every 5 minutes
+setInterval(async () => {
+  if (rows.length > 0 || currentRow.length > 0) {
+    try {
+      await window.electronAPI.saveRowAutosave(rows, currentRow);
+      console.log('💾 Auto-saved data');
+    } catch (err) {
+      console.warn('⚠️ Auto-save failed:', err);
+    }
+  }
+}, 5 * 60 * 1000); // 5 minutes
 
 // Periodic URL update
 setInterval(updateUrlDisplay, 3000);
