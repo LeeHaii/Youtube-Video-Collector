@@ -368,7 +368,7 @@ ipcMain.handle('get-autosave-path', async (event) => {
 });
 
 // 5-Sec Downloader - Start Download
-ipcMain.handle('start-download', async (event, csvPath, outputPath) => {
+ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax) => {
   try {
     // Verify files exist
     if (!fs.existsSync(csvPath)) {
@@ -395,9 +395,11 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath) => {
     console.log(`📄 Script: ${pythonScriptPath}`);
     console.log(`📋 CSV: ${csvPath}`);
     console.log(`📁 Output: ${outputPath}`);
+    console.log(`⏱️  Clip Sleep: ${clipSleepMin}-${clipSleepMax}s`);
+    console.log(`⏱️  Row Sleep: ${rowSleepMin}-${rowSleepMax}s`);
 
     // Spawn Python process WITHOUT shell to properly handle spaces in paths
-    downloadProcess = spawn(pythonExe, [pythonScriptPath, csvPath, outputPath], {
+    downloadProcess = spawn(pythonExe, [pythonScriptPath, csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax], {
       stdio: 'pipe',
       shell: false,
       env: { ...process.env, PYTHONIOENCODING: 'utf-8' },

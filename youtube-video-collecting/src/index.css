@@ -553,6 +553,32 @@ body {
   transform: translateY(0);
 }
 
+/* URL Cell Button Style */
+.url-cell-button {
+  cursor: pointer;
+  color: #007acc;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.url-cell-button:hover {
+  color: #005a9e;
+  text-decoration: none;
+  background-color: rgba(0, 122, 204, 0.1);
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+.url-cell-button:active {
+  opacity: 0.8;
+}
+
 /* Current Row Section */
 .current-row-section {
   padding: 12px;

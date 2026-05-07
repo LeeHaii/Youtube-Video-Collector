@@ -221,9 +221,16 @@ def execute_render_workflow(
     time.sleep(delays.get("5", 1))
     
     img_path = os.path.join(materials_path, "cancel_link_media.png")
-    if find_and_click(img_path):
-        console_log("  ✓ Cancel link media clicked")
-        time.sleep(1)
+    wait_timeout_ms = delays.get("5", 1) * 1000
+    
+    if wait_for_image(img_path, wait_timeout_ms):
+        console_log("  ✓ Cancel link media button appeared, clicking it...")
+        time.sleep(0.5)
+        if find_and_click(img_path):
+            console_log("  ✓ Cancel link media clicked")
+            time.sleep(1)
+        else:
+            console_log("  ⚠️  Image appeared but click failed")
     else:
         console_log("  ℹ️  Cancel link media not found (OK to skip)")
     

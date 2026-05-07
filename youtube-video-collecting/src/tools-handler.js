@@ -9,6 +9,10 @@ console.log('🔧 Tools Handler initializing...');
 // 5-Sec Downloader Elements
 const csvPathInput = document.getElementById('csv-path');
 const outputPathInput = document.getElementById('output-path');
+const clipSleepMinInput = document.getElementById('clip-sleep-min');
+const clipSleepMaxInput = document.getElementById('clip-sleep-max');
+const rowSleepMinInput = document.getElementById('row-sleep-min');
+const rowSleepMaxInput = document.getElementById('row-sleep-max');
 const downloaderLog = document.getElementById('downloader-log');
 const startBtn = document.getElementById('downloader-start-btn');
 const stopBtn = document.getElementById('downloader-stop-btn');
@@ -147,10 +151,16 @@ document.getElementById('output-browse-btn').addEventListener('click', async () 
 startBtn.addEventListener('click', () => {
   const csvPath = csvPathInput.value;
   const outputPath = outputPathInput.value;
+  const clipSleepMin = parseFloat(clipSleepMinInput.value) || 1;
+  const clipSleepMax = parseFloat(clipSleepMaxInput.value) || 2;
+  const rowSleepMin = parseFloat(rowSleepMinInput.value) || 10;
+  const rowSleepMax = parseFloat(rowSleepMaxInput.value) || 15;
 
   console.log('🔵 Start Download button clicked');
   console.log('   CSV Path:', csvPath);
   console.log('   Output Path:', outputPath);
+  console.log('   Clip Sleep:', `${clipSleepMin}-${clipSleepMax}s`);
+  console.log('   Row Sleep:', `${rowSleepMin}-${rowSleepMax}s`);
 
   if (!csvPath) {
     console.warn('❌ CSV path is empty');
@@ -171,7 +181,7 @@ startBtn.addEventListener('click', () => {
 
   // Call IPC to start download
   console.log('📤 Calling window.electronAPI.startDownload()');
-  window.electronAPI.startDownload(csvPath, outputPath)
+  window.electronAPI.startDownload(csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax)
     .then((result) => {
       console.log('✅ startDownload IPC returned:', result);
       if (!result.success) {

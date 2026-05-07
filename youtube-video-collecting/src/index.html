@@ -61,6 +61,7 @@
                   <button id="take-url-btn" class="action-btn">Take URL + Markers</button>
                   <button id="next-row-btn" class="action-btn">Next Row</button>
                   <button id="export-btn" class="action-btn primary">Export CSV</button>
+                  <button id="save-row-btn" class="action-btn primary" style="display: none; background-color: #48bb78;">Save Changes</button>
                 </div>
 
                 <!-- Current Row Display -->
@@ -129,6 +130,31 @@
             <div class="file-input-group">
               <input type="text" id="output-path" class="file-input" readonly placeholder="No folder selected" />
               <button id="output-browse-btn" class="btn-secondary">Browse</button>
+            </div>
+          </div>
+
+          <!-- Sleep Intervals Settings -->
+          <div class="form-section">
+            <label class="form-label">Sleep Intervals (to avoid rate limiting):</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <!-- Clip Sleep -->
+              <div>
+                <label style="font-size: 12px; color: #718096; display: block; margin-bottom: 4px;">Between Clips (seconds)</label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input type="number" id="clip-sleep-min" class="form-input" value="1" min="0" step="0.5" style="flex: 1;" title="Minimum seconds between clips" />
+                  <span style="color: #718096; font-size: 12px;">to</span>
+                  <input type="number" id="clip-sleep-max" class="form-input" value="2" min="0" step="0.5" style="flex: 1;" title="Maximum seconds between clips" />
+                </div>
+              </div>
+              <!-- Row Sleep -->
+              <div>
+                <label style="font-size: 12px; color: #718096; display: block; margin-bottom: 4px;">Between Rows (seconds)</label>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <input type="number" id="row-sleep-min" class="form-input" value="10" min="0" step="0.5" style="flex: 1;" title="Minimum seconds between rows" />
+                  <span style="color: #718096; font-size: 12px;">to</span>
+                  <input type="number" id="row-sleep-max" class="form-input" value="15" min="0" step="0.5" style="flex: 1;" title="Maximum seconds between rows" />
+                </div>
+              </div>
             </div>
           </div>
 

@@ -7,6 +7,7 @@ let currentRow = [];
 let rows = [];
 let currentUrl = '';
 let lastMarkerTime = -1; // Prevent duplicate markers
+let loadedRowIndex = -1; // Track which row is currently loaded for editing
 
 // DOM Elements
 const youtubeWebview = document.querySelector('#youtube-webview');
@@ -23,6 +24,7 @@ const rowCountSpan = document.querySelector('#row-count');
 const markerCountSpan = document.querySelector('#marker-count');
 const rowsGrid = document.querySelector('#rows-grid tbody');
 const loadRowBtn = document.querySelector('#load-row-btn');
+const saveRowBtn = document.querySelector('#save-row-btn');
 
 console.log('✅ DOM elements loaded');
 
@@ -33,6 +35,7 @@ exportBtn.addEventListener('click', exportCSV);
 undoBtn.addEventListener('click', undoMarker);
 clearRowBtn.addEventListener('click', clearCurrentRow);
 loadRowBtn.addEventListener('click', loadRowData);
+saveRowBtn.addEventListener('click', saveRowChanges);
 
 console.log('✅ Button listeners attached');
 
@@ -436,6 +439,110 @@ function nextRow() {
   updateRowsTable();
 }
 
+// Load Row to Panel - Load URL and timestamps from a row for editing
+function loadRowToPanel(rowIndex, urlIndex) {
+  const row = rows[rowIndex];
+  const url = row[urlIndex];
+  const timestampStr = row[urlIndex + 1] || '';
+
+  console.log(`📂 Loading row ${rowIndex + 1}, URL index ${urlIndex}`);
+  console.log(`   URL: ${url}`);
+  console.log(`   Timestamps: ${timestampStr}`);
+
+  // Load URL to YouTube webview
+  youtubeWebview.src = url;
+  currentUrl = url;
+  currentUrlInput.value = url;
+
+  // Parse and load timestamps to markers
+  markers = [];
+  if (timestampStr) {
+    const timestampParts = timestampStr.split(';');
+    timestampParts.forEach((ts) => {
+      const seconds = parseTimeToSeconds(ts.trim());
+      if (!isNaN(seconds)) {
+        markers.push({
+          time: seconds,
+          formatted: ts.trim(),
+        });
+      }
+    });
+  }
+
+  console.log(`   Loaded ${markers.length} markers`);
+  updateMarkersDisplay();
+
+  // Store the loaded row index for saving later
+  loadedRowIndex = rowIndex;
+
+  // Show the save button
+  saveRowBtn.style.display = 'inline-block';
+
+  // Scroll to the control panel
+  document.querySelector('.control-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// Parse time string (mm.ss or hh.mm.ss) to seconds
+function parseTimeToSeconds(timeStr) {
+  const parts = timeStr.split('.');
+  if (parts.length === 2) {
+    // mm.ss format
+    return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+  } else if (parts.length === 3) {
+    // hh.mm.ss format
+    return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2]);
+  }
+  return NaN;
+}
+
+// Save Row Changes - Save the modified markers back to the loaded row
+function saveRowChanges() {
+  if (loadedRowIndex === -1) {
+    alert('No row is loaded for editing');
+    return;
+  }
+
+  if (markers.length === 0) {
+    alert('Please add at least one marker before saving');
+    return;
+  }
+
+  // Convert markers to semicolon-separated format
+  const timestampStr = markers.map((m) => m.formatted).join(';');
+
+  // Update the row with new timestamps
+  const row = rows[loadedRowIndex];
+  if (row.length >= 2) {
+    // Find the URL index and update the timestamps next to it
+    for (let i = 0; i < row.length; i += 2) {
+      if (i + 1 < row.length) {
+        // Update the timestamps for this URL
+        row[i + 1] = timestampStr;
+        break;
+      }
+    }
+  }
+
+  console.log(`✅ Row ${loadedRowIndex + 1} saved with timestamps: ${timestampStr}`);
+
+  // Reset the loaded row index
+  loadedRowIndex = -1;
+
+  // Clear markers and current row
+  markers = [];
+  currentRow = [];
+  lastMarkerTime = -1;
+
+  updateMarkersDisplay();
+  updateCurrentRowDisplay();
+  updateRowsTable();
+
+  // Hide the save button
+  saveRowBtn.style.display = 'none';
+
+  showNotification('✅ Row saved successfully!');
+}
+
 // Update current row display
 function updateCurrentRowDisplay() {
   if (currentRow.length === 0) {
@@ -472,12 +579,20 @@ function updateRowsTable() {
     
     // Add URL and timestamps alternately
     for (let i = 0; i < row.length; i += 2) {
-      // URL cell
+      // URL cell - Make it a clickable button
       const urlCell = document.createElement('td');
       urlCell.className = 'row-data';
       const url = row[i];
-      urlCell.textContent = url;
-      urlCell.title = url; // Full URL in tooltip
+      
+      const urlButton = document.createElement('button');
+      urlButton.className = 'url-cell-button';
+      urlButton.textContent = url;
+      urlButton.title = `Click to load: ${url}`;
+      urlButton.addEventListener('click', () => {
+        loadRowToPanel(rowIndex, i);
+      });
+      
+      urlCell.appendChild(urlButton);
       tr.appendChild(urlCell);
       
       // Timestamps cell
@@ -1131,18 +1246,20 @@ renderStartBtn.addEventListener('click', async () => {
     return;
   }
 
-  // Collect delay values
+  // Collect delay values - keys MUST match Python script expectations
   const delays = {
-    step1_2: parseInt(delayInputs['1-2']?.value || 1),
-    step3: parseInt(delayInputs['3']?.value || 2),
-    step4: parseInt(delayInputs['4']?.value || 1),
-    step5: parseInt(delayInputs['5']?.value || 1),
-    step6: parseInt(delayInputs['6']?.value || 2),
-    step7: parseInt(delayInputs['7']?.value || 1),
-    step8: parseInt(delayInputs['8']?.value || 1200),
-    step9_10: parseInt(delayInputs['9-10']?.value || 1),
-    step11: parseInt(delayInputs['11']?.value || 1),
+    "1_2": parseInt(delayInputs['1-2']?.value || 1),
+    "3": parseInt(delayInputs['3']?.value || 2),
+    "4": parseInt(delayInputs['4']?.value || 1),
+    "5": parseInt(delayInputs['5']?.value || 1),
+    "6": parseInt(delayInputs['6']?.value || 2),
+    "7": parseInt(delayInputs['7']?.value || 1),
+    "8": parseInt(delayInputs['8']?.value || 1200),
+    "9_10": parseInt(delayInputs['9-10']?.value || 1),
+    "11": parseInt(delayInputs['11']?.value || 1),
   };
+
+  console.log('📊 Collected delays:', delays);
 
   try {
     renderStartBtn.disabled = true;

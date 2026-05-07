@@ -151,13 +151,14 @@ def parse_input_csv(csv_path: str):
     return rows
 
 
-def process_clips(csv_path: str, output_base_dir: str, log_callback=print, stop_event=None) -> None:
+def process_clips(csv_path: str, output_base_dir: str, clip_sleep_min: float = 1.0, clip_sleep_max: float = 2.0, row_sleep_min: float = 10.0, row_sleep_max: float = 15.0, log_callback=print, stop_event=None) -> None:
     rows = parse_input_csv(csv_path)
 
     # Filter out empty rows and count only non-empty rows
     non_empty_rows = [(idx, pairs) for idx, pairs in enumerate(rows) if pairs]
 
-    log_callback(f"Processing {len(non_empty_rows)} non-empty rows\n\n")
+    log_callback(f"Processing {len(non_empty_rows)} non-empty rows\n")
+    log_callback(f"⏱️  Clip Sleep: {clip_sleep_min}-{clip_sleep_max}s | Row Sleep: {row_sleep_min}-{row_sleep_max}s\n\n")
 
     total_clips = sum(len(ts) for _, pairs in non_empty_rows for _, ts in pairs)
     clips_done = 0
@@ -201,7 +202,7 @@ def process_clips(csv_path: str, output_base_dir: str, log_callback=print, stop_
                         stop_event=stop_event,
                     )
                     clip_count += 1
-                    stampsleep = random.uniform(1, 2)
+                    stampsleep = random.uniform(clip_sleep_min, clip_sleep_max)
                     log_callback(f"         Pausing before next clip in {stampsleep.__round__(2)}s\n")
                     time.sleep(stampsleep)  # brief pause between downloads
                 except Exception as e:
@@ -210,7 +211,7 @@ def process_clips(csv_path: str, output_base_dir: str, log_callback=print, stop_
         row_end_time = time.perf_counter()
         row_duration = row_end_time - row_start_time
         log_callback(f"Row {output_row_num}: completed in {row_duration.__round__(2)}s\n")
-        rowsleep = random.uniform(10, 15)
+        rowsleep = random.uniform(row_sleep_min, row_sleep_max)
         log_callback(f"         Pausing before next row in {rowsleep.__round__(2)}s\n\n")
         time.sleep(rowsleep)  # brief pause between rows
 
@@ -242,12 +243,18 @@ def find_ffmpeg_exe():
 def main():
     """CLI entry point for 5-Sec Downloader."""
     if len(sys.argv) < 3:
-        print("Usage: python 5_sec_downloader.py <csv_path> <output_path>")
-        print("Example: python 5_sec_downloader.py input.csv ./output")
+        print("Usage: python 5_sec_downloader.py <csv_path> <output_path> [clip_sleep_min] [clip_sleep_max] [row_sleep_min] [row_sleep_max]")
+        print("Example: python 5_sec_downloader.py input.csv ./output 1 2 10 15")
         sys.exit(1)
     
     csv_path = sys.argv[1]
     output_path = sys.argv[2]
+    
+    # Parse optional sleep interval arguments with defaults
+    clip_sleep_min = float(sys.argv[3]) if len(sys.argv) > 3 else 1.0
+    clip_sleep_max = float(sys.argv[4]) if len(sys.argv) > 4 else 2.0
+    row_sleep_min = float(sys.argv[5]) if len(sys.argv) > 5 else 10.0
+    row_sleep_max = float(sys.argv[6]) if len(sys.argv) > 6 else 15.0
     
     # Validate inputs
     if not Path(csv_path).exists():
@@ -271,9 +278,11 @@ def main():
     try:
         print(f"🚀 Starting 5-Sec Download...")
         print(f"   CSV: {csv_path}")
-        print(f"   Output: {output_path}\n")
+        print(f"   Output: {output_path}")
+        print(f"   Clip Sleep: {clip_sleep_min}-{clip_sleep_max}s")
+        print(f"   Row Sleep: {row_sleep_min}-{row_sleep_max}s\n")
         
-        process_clips(csv_path, output_path, log_callback=print)
+        process_clips(csv_path, output_path, clip_sleep_min, clip_sleep_max, row_sleep_min, row_sleep_max, log_callback=print)
         
         print("\n✅ Processing completed successfully!")
         sys.exit(0)
