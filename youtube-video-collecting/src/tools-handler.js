@@ -410,4 +410,15 @@ document.getElementById('fb-link-capcut').addEventListener('click', (e) => {
   window.electronAPI.openUrl('https://www.facebook.com/rhymx2k3/');
 });
 
+document.getElementById('fb-link-render').addEventListener('click', (e) => {
+  e.preventDefault();
+  console.log('🔗 Opening Facebook link');
+  window.electronAPI.openUrl('https://www.facebook.com/rhymx2k3/');
+});
+
+document.getElementById('fb-link-trimmer').addEventListener('click', (e) => {
+  e.preventDefault();
+  console.log('🔗 Opening Facebook link');
+  window.electronAPI.openUrl('https://www.facebook.com/rhymx2k3/');
+});
 console.log('✅ Tools Handler fully initialized');

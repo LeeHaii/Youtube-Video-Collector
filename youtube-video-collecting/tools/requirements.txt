@@ -1,0 +1,4 @@
+pyautogui>=0.9.53
+Pillow>=9.0.0
+pyscreeze>=0.1.28
+keyboard>=0.13.5

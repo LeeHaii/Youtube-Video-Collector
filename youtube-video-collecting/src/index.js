@@ -70,6 +70,37 @@ function findPythonExecutable() {
   }
 }
 
+/**
+ * Find AutoHotkey executable in system PATH or common installation locations
+ * Compatible with AutoHotkey v1 and v2
+ */
+function findAutoHotkey() {
+  // First check common installation paths (most reliable)
+  const commonPaths = [
+    'C:\\Program Files\\AutoHotkey\\AutoHotkey.exe',
+    'C:\\Program Files (x86)\\AutoHotkey\\AutoHotkey.exe',
+    'C:\\Program Files\\AutoHotkey v2\\AutoHotkey.exe',
+    'C:\\Program Files (x86)\\AutoHotkey v2\\AutoHotkey.exe',
+  ];
+  
+  for (const ahkPath of commonPaths) {
+    if (fs.existsSync(ahkPath)) {
+      console.log(`✅ Found AutoHotkey at: ${ahkPath}`);
+      return ahkPath;
+    }
+  }
+  
+  // If not found in common paths, assume it's in PATH and return the command
+  try {
+    execSync('where AutoHotkey.exe', { stdio: 'pipe' });
+    console.log('✅ Found AutoHotkey.exe in PATH');
+    return 'AutoHotkey.exe';
+  } catch (e) {
+    console.error('❌ AutoHotkey not found in PATH or common installation directories');
+    return null;
+  }
+}
+
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -645,6 +676,127 @@ ipcMain.handle('trim-youtube-video', async (event, url, startSeconds, endSeconds
     });
   } catch (error) {
     console.error(`❌ Trimmer error: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+});
+
+// CapCut Auto Render - Scan Projects with draft_meta_info.json
+ipcMain.handle('scan-render-projects', async (event, folderPath) => {
+  try {
+    if (!fs.existsSync(folderPath)) {
+      return { success: false, error: 'Folder not found' };
+    }
+
+    const projects = [];
+    const items = fs.readdirSync(folderPath);
+
+    for (const item of items) {
+      const itemPath = path.join(folderPath, item);
+      const stats = fs.statSync(itemPath);
+
+      if (stats.isDirectory()) {
+        // Check for draft_meta_info.json
+        const metaPath = path.join(itemPath, 'draft_meta_info.json');
+        if (fs.existsSync(metaPath)) {
+          try {
+            const metaData = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+            const draftFoldPath = metaData.draft_fold_path || itemPath;
+            // Extract project name from the end of the path
+            const projectName = path.basename(draftFoldPath);
+
+            projects.push({
+              name: projectName,
+              path: itemPath,
+              draftFoldPath: draftFoldPath,
+              metaPath: metaPath,
+            });
+          } catch (err) {
+            console.warn(`⚠️ Error parsing metadata for ${item}:`, err.message);
+          }
+        }
+      }
+    }
+
+    console.log(`✅ Found ${projects.length} CapCut projects`);
+    return { success: true, projects };
+  } catch (error) {
+    console.error('❌ Error scanning render projects:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// CapCut Auto Render - Start Rendering
+let capcutRenderProcess = null;
+
+ipcMain.handle('start-capcut-auto-render', async (event, selectedProjects, delays) => {
+  try {
+    if (!selectedProjects || selectedProjects.length === 0) {
+      return { success: false, error: 'No projects selected' };
+    }
+
+    if (capcutRenderProcess) {
+      return { success: false, error: 'Render process already running' };
+    }
+
+    // Find Python executable
+    const pythonPath = findPythonExecutable();
+    if (!pythonPath) {
+      const errorMsg = 'Python not found. Please install Python from https://www.python.org/';
+      mainWindow.webContents.send('capcut-render-log', `❌ ${errorMsg}`);
+      return { success: false, error: errorMsg };
+    }
+
+    // Get Python script path
+    const pyScriptPath = path.join(__dirname, '..', 'tools', 'capcut_auto_render.py');
+
+    if (!fs.existsSync(pyScriptPath)) {
+      const errorMsg = `Python script not found at ${pyScriptPath}`;
+      mainWindow.webContents.send('capcut-render-log', `❌ ${errorMsg}`);
+      return { success: false, error: errorMsg };
+    }
+
+    // Build project list and delays as arguments
+    const projectList = selectedProjects.join('|');
+    const delaysStr = JSON.stringify(delays);
+
+    // Log start message
+    mainWindow.webContents.send('capcut-render-log', `🚀 Starting CapCut Auto Render for ${selectedProjects.length} projects`);
+    mainWindow.webContents.send('capcut-render-log', `📍 Using Python: ${pythonPath}`);
+    mainWindow.webContents.send('capcut-render-log', `⏱️ Delays: Step 1-2=${delays.step1_2}s, Step 3=${delays.step3}s, Step 4=${delays.step4}s, Step 5=${delays.step5}s, Step 6=${delays.step6}s, Step 7=${delays.step7}s, Step 8=${delays.step8}s, Step 9-10=${delays.step9_10}s`);
+
+    // Spawn Python process
+    capcutRenderProcess = spawn(pythonPath, [pyScriptPath, projectList, delaysStr], {
+      stdio: 'pipe',
+      shell: false,
+    });
+
+    capcutRenderProcess.stdout.on('data', (data) => {
+      const message = data.toString('utf8').trim();
+      if (message) {
+        console.log(`[Python]: ${message}`);
+        mainWindow.webContents.send('capcut-render-log', `${message}`);
+      }
+    });
+
+    capcutRenderProcess.stderr.on('data', (data) => {
+      const message = data.toString('utf8').trim();
+      if (message) {
+        console.error(`[Python Error]: ${message}`);
+        mainWindow.webContents.send('capcut-render-log', `❌ ${message}`);
+      }
+    });
+
+    capcutRenderProcess.on('close', (code) => {
+      console.log(`[Python] Process exited with code ${code}`);
+      mainWindow.webContents.send('capcut-render-log', `✅ Render process completed (exit code: ${code})`);
+      capcutRenderProcess = null;
+    });
+
+    return { success: true, message: 'Render process started' };
+  } catch (error) {
+    console.error('❌ Error starting render process:', error);
+    mainWindow.webContents.send('capcut-render-log', `❌ Error: ${error.message}`);
+    capcutRenderProcess = null;
     return { success: false, error: error.message };
   }
 });

@@ -13,6 +13,7 @@
         <button class="tab-btn" data-tab="downloader-tab">5-Sec Downloader</button>
         <button class="tab-btn" data-tab="trimmer-tab">YouTube Trimmer</button>
         <button class="tab-btn" data-tab="capcut-tab">CapCut Shuffle</button>
+        <button class="tab-btn" data-tab="capcut-render-tab">CapCut Auto Render</button>
       </div>
 
       <!-- Tab 1: YouTube Video Collector -->
@@ -310,6 +311,90 @@
           <div class="tool-footer">
             <span>© 2026 TranDucThang's Clip Shuffler</span>
             <a href="#" id="fb-link-capcut">Facebook</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 5: CapCut Auto Render -->
+      <div id="capcut-render-tab" class="tab-content">
+        <div class="tool-container">
+          <h1>CapCut Auto Render</h1>
+
+          <!-- Projects Path Selector -->
+          <div class="form-section">
+            <label class="form-label">Projects Folder:</label>
+            <div class="file-input-group">
+              <input type="text" id="render-projects-path" class="file-input" readonly placeholder="No folder selected" />
+              <button id="render-browse-btn" class="btn-secondary">Browse</button>
+            </div>
+          </div>
+
+          <!-- Projects List with Checkboxes -->
+          <div class="form-section">
+            <label class="form-label">Select Projects to Render:</label>
+            <div id="render-projects-list" class="projects-list"></div>
+          </div>
+
+          <!-- Delay Settings -->
+          <div class="form-section">
+            <label class="form-label">Step Delays (seconds):</label>
+            <div class="delays-grid">
+              <div class="delay-field">
+                <label>Click CapCut & search:</label>
+                <input type="number" id="delay-1-2" class="delay-input" min="0" value="1" />
+              </div>
+              <div class="delay-field">
+                <label>Search for project:</label>
+                <input type="number" id="delay-3" class="delay-input" min="0" value="2" />
+              </div>
+              <div class="delay-field">
+                <label>Click project:</label>
+                <input type="number" id="delay-4" class="delay-input" min="0" value="1" />
+              </div>
+              <div class="delay-field">
+                <label>Cancel link media:</label>
+                <input type="number" id="delay-5" class="delay-input" min="0" value="1" />
+              </div>
+              <div class="delay-field">
+                <label>Render (Ctrl+E):</label>
+                <input type="number" id="delay-6" class="delay-input" min="0" value="2" />
+              </div>
+              <div class="delay-field">
+                <label>Click export:</label>
+                <input type="number" id="delay-7" class="delay-input" min="0" value="1" />
+              </div>
+              <div class="delay-field">
+                <label>Wait for share & cancel:</label>
+                <input type="number" id="delay-8" class="delay-input" min="0" value="1200" />
+              </div>
+              <div class="delay-field">
+                <label>Menu & home:</label>
+                <input type="number" id="delay-9-10" class="delay-input" min="0" value="1" />
+              </div>
+              <div class="delay-field">
+                <label>Cancel search:</label>
+                <input type="number" id="delay-11" class="delay-input" min="0" value="1" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Start Button -->
+          <div class="form-section">
+            <button id="render-start-btn" class="btn-primary" style="width: 100%; padding: 15px; font-size: 16px;">
+              Start Rendering Process
+            </button>
+          </div>
+
+          <!-- Log Area -->
+          <div class="log-section">
+            <label class="form-label">Log:</label>
+            <div id="render-log" class="log-output"></div>
+          </div>
+
+          <!-- Footer -->
+          <div class="tool-footer">
+            <span>© 2026 TranDucThang's CapCut Auto Render</span>
+            <a href="#" id="fb-link-render">Facebook</a>
           </div>
         </div>
       </div>

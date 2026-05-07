@@ -69,7 +69,7 @@ def trim_youtube_video(
     log_callback(f"📁 Output: {output_file}\n")
 
     ydl_opts = {
-        "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+        "format": "bestvideo[height<=2160]+bestaudio/best[height<=2160]/best",
         "outtmpl": output_file.replace('.mp4', ''),
         
         # Critical: Only download the specified time range

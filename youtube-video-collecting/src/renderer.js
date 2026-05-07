@@ -1031,3 +1031,141 @@ if (document.readyState === 'loading') {
 } else {
   initTrimmer();
 }
+
+// ============================================================================
+// CAPCUT AUTO RENDER CONTROLS
+// ============================================================================
+
+console.log('🎬 CapCut Auto Render: Starting initialization...');
+
+// DOM Elements
+const renderBrowseBtn = document.querySelector('#render-browse-btn');
+const renderProjectsPath = document.querySelector('#render-projects-path');
+const renderProjectsList = document.querySelector('#render-projects-list');
+const renderStartBtn = document.querySelector('#render-start-btn');
+const renderLog = document.querySelector('#render-log');
+
+// Delay inputs
+const delayInputs = {
+  '1-2': document.querySelector('#delay-1-2'),
+  '3': document.querySelector('#delay-3'),
+  '4': document.querySelector('#delay-4'),
+  '5': document.querySelector('#delay-5'),
+  '6': document.querySelector('#delay-6'),
+  '7': document.querySelector('#delay-7'),
+  '8': document.querySelector('#delay-8'),
+  '9-10': document.querySelector('#delay-9-10'),
+  '11': document.querySelector('#delay-11'),
+};
+
+let renderProjects = [];
+
+console.log('✅ CapCut Auto Render DOM elements loaded');
+
+// Browse button
+renderBrowseBtn.addEventListener('click', async () => {
+  console.log('📂 Browse button clicked');
+  try {
+    const result = await window.electronAPI.openFolderDialog();
+    if (result && result.folderPath) {
+      renderProjectsPath.value = result.folderPath;
+      await loadRenderProjects(result.folderPath);
+      appendRenderLog(`📂 Folder selected: ${result.folderPath}`);
+    }
+  } catch (err) {
+    console.error('❌ Browse error:', err);
+    appendRenderLog(`❌ Error: ${err.message}`);
+  }
+});
+
+// Load projects with draft_meta_info.json
+async function loadRenderProjects(folderPath) {
+  try {
+    const result = await window.electronAPI.scanRenderProjects(folderPath);
+    if (result.success) {
+      renderProjects = result.projects;
+      updateRenderProjectsList();
+      appendRenderLog(`✅ Found ${result.projects.length} projects`);
+    } else {
+      appendRenderLog(`❌ Error: ${result.error}`);
+    }
+  } catch (err) {
+    console.error('❌ Error scanning projects:', err);
+    appendRenderLog(`❌ Error: ${err.message}`);
+  }
+}
+
+// Update render projects list display
+function updateRenderProjectsList() {
+  renderProjectsList.innerHTML = '';
+  renderProjects.forEach((project) => {
+    const item = document.createElement('div');
+    item.className = 'project-item';
+    item.innerHTML = `
+      <input type="checkbox" class="project-checkbox" data-path="${project.draftFoldPath}" />
+      <label>${project.name}</label>
+    `;
+    renderProjectsList.appendChild(item);
+  });
+}
+
+// Append log message
+function appendRenderLog(message) {
+  if (!renderLog) return;
+  const timestamp = new Date().toLocaleTimeString();
+  const line = `[${timestamp}] ${message}`;
+  renderLog.textContent += line + '\n';
+  renderLog.scrollTop = renderLog.scrollHeight;
+  console.log(`📝 [RENDER LOG]: ${message}`);
+}
+
+// Start rendering process
+renderStartBtn.addEventListener('click', async () => {
+  console.log('🚀 Start render button clicked');
+  
+  const selectedProjects = Array.from(renderProjectsList.querySelectorAll('.project-checkbox:checked'))
+    .map(cb => cb.dataset.path);
+
+  if (selectedProjects.length === 0) {
+    appendRenderLog('❌ Please select at least one project');
+    return;
+  }
+
+  // Collect delay values
+  const delays = {
+    step1_2: parseInt(delayInputs['1-2']?.value || 1),
+    step3: parseInt(delayInputs['3']?.value || 2),
+    step4: parseInt(delayInputs['4']?.value || 1),
+    step5: parseInt(delayInputs['5']?.value || 1),
+    step6: parseInt(delayInputs['6']?.value || 2),
+    step7: parseInt(delayInputs['7']?.value || 1),
+    step8: parseInt(delayInputs['8']?.value || 1200),
+    step9_10: parseInt(delayInputs['9-10']?.value || 1),
+    step11: parseInt(delayInputs['11']?.value || 1),
+  };
+
+  try {
+    renderStartBtn.disabled = true;
+    appendRenderLog(`🚀 Starting render for ${selectedProjects.length} projects...`);
+    
+    const result = await window.electronAPI.startCapcutAutoRender(selectedProjects, delays);
+    
+    if (result.success) {
+      appendRenderLog(`✅ Rendering completed successfully!`);
+    } else {
+      appendRenderLog(`❌ Error: ${result.error}`);
+    }
+  } catch (err) {
+    console.error('❌ Render error:', err);
+    appendRenderLog(`❌ Error: ${err.message}`);
+  } finally {
+    renderStartBtn.disabled = false;
+  }
+});
+
+// Listen for capcut-render-log events
+if (window.electronAPI && window.electronAPI.onCapcutRenderLog) {
+  window.electronAPI.onCapcutRenderLog((message) => {
+    appendRenderLog(message);
+  });
+}
