@@ -8,6 +8,7 @@ let rows = [];
 let currentUrl = '';
 let lastMarkerTime = -1; // Prevent duplicate markers
 let loadedRowIndex = -1; // Track which row is currently loaded for editing
+let loadedUrlIndex = -1; // Track which URL in the row is being edited (-1 = entire row)
 
 // DOM Elements
 const youtubeWebview = document.querySelector('#youtube-webview');
@@ -439,7 +440,7 @@ function nextRow() {
   updateRowsTable();
 }
 
-// Load Row to Panel - Load URL and timestamps from a row for editing
+// Load Row to Panel - Load URL and timestamps from a row for editing (single URL)
 function loadRowToPanel(rowIndex, urlIndex) {
   const row = rows[rowIndex];
   const url = row[urlIndex];
@@ -472,14 +473,46 @@ function loadRowToPanel(rowIndex, urlIndex) {
   console.log(`   Loaded ${markers.length} markers`);
   updateMarkersDisplay();
 
-  // Store the loaded row index for saving later
+  // Store the loaded row index and URL index for saving later
   loadedRowIndex = rowIndex;
+  loadedUrlIndex = urlIndex;
 
   // Show the save button
   saveRowBtn.style.display = 'inline-block';
 
   // Scroll to the control panel
   document.querySelector('.control-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// Edit Existing Row - Load entire row for adding more URLs/timestamps
+function editExistingRow(rowIndex) {
+  const row = rows[rowIndex];
+  console.log(`✏️  Editing row ${rowIndex + 1}`);
+  console.log(`   Current data:`, row);
+
+  // Load the row data into currentRow for appending
+  currentRow = [...row];
+  
+  // Clear markers and URL since we're in append mode
+  markers = [];
+  currentUrl = '';
+  currentUrlInput.value = '';
+  lastMarkerTime = -1;
+
+  // Store the editing row index
+  loadedRowIndex = rowIndex;
+  loadedUrlIndex = -1; // -1 indicates we're editing the whole row, not a single URL
+
+  updateCurrentRowDisplay();
+  updateMarkersDisplay();
+
+  // Show the save button
+  saveRowBtn.style.display = 'inline-block';
+
+  // Scroll to the control panel
+  document.querySelector('.control-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  
+  showNotification(`📝 Editing row ${rowIndex + 1}. Add new URLs and timestamps, then save.`);
 }
 
 // Parse time string (mm.ss or hh.mm.ss) to seconds
@@ -495,43 +528,51 @@ function parseTimeToSeconds(timeStr) {
   return NaN;
 }
 
-// Save Row Changes - Save the modified markers back to the loaded row
+// Save Row Changes - Save the modified markers back to the loaded row or save entire row
 function saveRowChanges() {
   if (loadedRowIndex === -1) {
     alert('No row is loaded for editing');
     return;
   }
 
-  if (markers.length === 0) {
-    alert('Please add at least one marker before saving');
-    return;
-  }
+  // Case 1: Editing a single URL in an existing row
+  if (loadedUrlIndex !== -1) {
+    if (markers.length === 0) {
+      alert('Please add at least one marker before saving');
+      return;
+    }
 
-  // Convert markers to semicolon-separated format
-  const timestampStr = markers.map((m) => m.formatted).join(';');
+    // Convert markers to semicolon-separated format
+    const timestampStr = markers.map((m) => m.formatted).join(';');
 
-  // Update the row with new timestamps
-  const row = rows[loadedRowIndex];
-  if (row.length >= 2) {
-    // Find the URL index and update the timestamps next to it
-    for (let i = 0; i < row.length; i += 2) {
-      if (i + 1 < row.length) {
-        // Update the timestamps for this URL
-        row[i + 1] = timestampStr;
-        break;
-      }
+    // Update the row with new timestamps
+    const row = rows[loadedRowIndex];
+    if (loadedUrlIndex >= 0 && loadedUrlIndex < row.length) {
+      row[loadedUrlIndex + 1] = timestampStr;
+      console.log(`✅ Updated timestamps for URL at index ${loadedUrlIndex}`);
     }
   }
+  // Case 2: Editing entire row (appending new URLs)
+  else {
+    if (currentRow.length === 0) {
+      alert('Row is empty. Please add at least one URL and marker');
+      return;
+    }
 
-  console.log(`✅ Row ${loadedRowIndex + 1} saved with timestamps: ${timestampStr}`);
+    // Replace the row with the updated currentRow
+    rows[loadedRowIndex] = [...currentRow];
+    console.log(`✅ Row ${loadedRowIndex + 1} updated with all data`);
+  }
 
-  // Reset the loaded row index
+  // Reset the loaded row indices
   loadedRowIndex = -1;
+  loadedUrlIndex = -1;
 
   // Clear markers and current row
   markers = [];
   currentRow = [];
   lastMarkerTime = -1;
+  currentUrl = '';
 
   updateMarkersDisplay();
   updateCurrentRowDisplay();
@@ -540,7 +581,43 @@ function saveRowChanges() {
   // Hide the save button
   saveRowBtn.style.display = 'none';
 
-  showNotification('✅ Row saved successfully!');
+  showNotification('✅ Changes saved successfully!');
+}
+
+// Delete URL from a row with confirmation
+function deleteUrlFromRow(rowIndex, urlIndex) {
+  const row = rows[rowIndex];
+  const url = row[urlIndex];
+  
+  // Ask for confirmation
+  const confirmed = confirm(`Delete this URL and its timestamps?\n\n${url}`);
+  
+  if (!confirmed) {
+    console.log(`Deletion cancelled for URL: ${url}`);
+    return;
+  }
+
+  // Remove the URL and its timestamps
+  row.splice(urlIndex, 2);
+  
+  // If row is now empty, optionally remove the entire row
+  if (row.length === 0) {
+    const rowConfirmed = confirm('This URL pair was the last in the row. Delete the entire row?');
+    if (rowConfirmed) {
+      rows.splice(rowIndex, 1);
+      console.log(`✅ Row ${rowIndex + 1} deleted`);
+    } else {
+      // Re-add the deleted pair if user cancels
+      row.splice(urlIndex, 0, url, '');
+      console.log(`Restoration cancelled`);
+      return;
+    }
+  } else {
+    console.log(`✅ URL deleted from row ${rowIndex + 1}`);
+  }
+
+  updateRowsTable();
+  showNotification('✅ URL deleted successfully!');
 }
 
 // Update current row display
@@ -571,19 +648,27 @@ function updateRowsTable() {
   rows.forEach((row, rowIndex) => {
     const tr = document.createElement('tr');
     
-    // Row number cell
+    // Row number cell - make it clickable button
     const numCell = document.createElement('td');
     numCell.className = 'row-num';
-    numCell.textContent = `${rowIndex + 1}`;
+    
+    const rowBtn = document.createElement('button');
+    rowBtn.className = 'row-num-button';
+    rowBtn.textContent = `${rowIndex + 1}`;
+    rowBtn.title = 'Click to edit this row';
+    rowBtn.addEventListener('click', () => editExistingRow(rowIndex));
+    
+    numCell.appendChild(rowBtn);
     tr.appendChild(numCell);
     
     // Add URL and timestamps alternately
     for (let i = 0; i < row.length; i += 2) {
-      // URL cell - Make it a clickable button
+      // URL cell - Make it a clickable button with delete option on hover
       const urlCell = document.createElement('td');
-      urlCell.className = 'row-data';
+      urlCell.className = 'row-data url-data-cell';
       const url = row[i];
       
+      // URL button
       const urlButton = document.createElement('button');
       urlButton.className = 'url-cell-button';
       urlButton.textContent = url;
@@ -593,6 +678,18 @@ function updateRowsTable() {
       });
       
       urlCell.appendChild(urlButton);
+      
+      // Delete button (hidden by default, shown on hover)
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'delete-url-btn';
+      deleteBtn.textContent = '✕';
+      deleteBtn.title = 'Delete this URL';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteUrlFromRow(rowIndex, i);
+      });
+      
+      urlCell.appendChild(deleteBtn);
       tr.appendChild(urlCell);
       
       // Timestamps cell

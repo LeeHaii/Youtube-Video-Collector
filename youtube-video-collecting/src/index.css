@@ -579,6 +579,67 @@ body {
   opacity: 0.8;
 }
 
+/* Row Number Button Style */
+.row-num-button {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  color: #007acc;
+  font-weight: 600;
+  font-size: inherit;
+  border-radius: 2px;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.row-num-button:hover {
+  background-color: rgba(0, 122, 204, 0.15);
+  color: #005a9e;
+}
+
+.row-num-button:active {
+  opacity: 0.8;
+}
+
+/* URL Data Cell - Position relative for delete button */
+.url-data-cell {
+  position: relative;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+}
+
+/* Delete URL Button Style */
+.delete-url-btn {
+  cursor: pointer;
+  background-color: #f56565;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 2px;
+  font-size: 14px;
+  font-weight: bold;
+  margin-left: 4px;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.url-data-cell:hover .delete-url-btn {
+  opacity: 1;
+  visibility: visible;
+}
+
+.delete-url-btn:hover {
+  background-color: #e53e3e;
+}
+
+.delete-url-btn:active {
+  opacity: 0.9;
+}
+
 /* Current Row Section */
 .current-row-section {
   padding: 12px;
