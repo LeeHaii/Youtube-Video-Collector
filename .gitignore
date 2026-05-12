@@ -90,3 +90,5 @@ typings/
 
 # Electron-Forge
 out/
+youtube-video-collecting/package.json
+youtube-video-collecting/package-lock.json
