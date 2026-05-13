@@ -118,12 +118,33 @@ const createWindow = () => {
   // and load the index.html of the app.
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
-  // Allow YouTube embeds - use minimal CSP that allows YouTube
-  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    const responseHeaders = { ...details.responseHeaders };
-    // Keep any existing CSP but make it more permissive for embeds
-    delete responseHeaders['content-security-policy'];
-    callback({ responseHeaders });
+  // ========================================================================
+  // YOUTUBE SHORTS BLOCKING (via Webview Injection)
+  // ========================================================================
+  
+  // Inject blocker into the YouTube webview when it's ready
+  mainWindow.webContents.on('did-finish-load', () => {
+    try {
+      const blockerCode = fs.readFileSync(path.join(__dirname, 'youtube-shorts-blocker.js'), 'utf8');
+      
+      // Inject into the webview
+      mainWindow.webContents.executeJavaScript(`
+        (function() {
+          const youtubeWebview = document.querySelector('#youtube-webview');
+          if (youtubeWebview) {
+            // Try to inject immediately
+            youtubeWebview.executeJavaScript(${JSON.stringify(blockerCode)}).catch(() => {});
+            
+            // Also listen for dom-ready in case it loads later
+            youtubeWebview.addEventListener('dom-ready', () => {
+              youtubeWebview.executeJavaScript(${JSON.stringify(blockerCode)}).catch(() => {});
+            });
+          }
+        })();
+      `).catch(() => {});
+    } catch (error) {
+      console.warn('⚠️ Failed to load YouTube shorts blocker:', error.message);
+    }
   });
 
   // Open the DevTools.
