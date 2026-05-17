@@ -205,9 +205,10 @@ const createWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 1600,
     height: 1200,
+    icon: path.join(__dirname, '../assets/chitoge.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,
+      nodeIntegration: true,
       contextIsolation: true,
       enableRemoteModule: false,
       webviewTag: true,
