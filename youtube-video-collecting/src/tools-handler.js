@@ -17,6 +17,11 @@ const downloaderLog = document.getElementById('downloader-log');
 const startBtn = document.getElementById('downloader-start-btn');
 const stopBtn = document.getElementById('downloader-stop-btn');
 
+// Error Extraction Elements
+const errorExtractionContainer = document.getElementById('error-extraction-buttons');
+const extractRateLimitBtn = document.getElementById('extract-rate-limit-btn');
+const extractAgeRestrictionBtn = document.getElementById('extract-age-restriction-btn');
+
 // CapCut Shuffle Elements
 const capcutFolderInput = document.getElementById('capcut-folder-path');
 const capcutSearchInput = document.getElementById('capcut-search-input');
@@ -61,6 +66,30 @@ window.electronAPI.onDownloadComplete?.((success) => {
     }
     startBtn.disabled = false;
     stopBtn.disabled = true;
+  }
+});
+
+// Setup download error summary listener
+window.electronAPI.onDownloadErrorSummary?.((summary) => {
+  console.log('📊 [Download Error Summary]:', summary);
+  
+  if (errorExtractionContainer) {
+    // Show error extraction buttons if there are any errors
+    if (summary.rateLimitCount > 0 || summary.ageRestrictionCount > 0) {
+      errorExtractionContainer.style.display = 'flex';
+      
+      // Update button text with error counts
+      if (extractRateLimitBtn && summary.rateLimitCount > 0) {
+        extractRateLimitBtn.textContent = `Extract Rate Limit Errors (${summary.rateLimitCount})`;
+        extractRateLimitBtn.style.display = 'inline-block';
+      }
+      
+      // Show age restriction button only if there are age restriction errors
+      if (extractAgeRestrictionBtn && summary.ageRestrictionCount > 0) {
+        extractAgeRestrictionBtn.textContent = `Extract Age Restriction Errors (${summary.ageRestrictionCount})`;
+        extractAgeRestrictionBtn.style.display = 'inline-block';
+      }
+    }
   }
 });
 
@@ -235,6 +264,46 @@ document.getElementById('open-output-btn').addEventListener('click', () => {
     .catch((err) => {
       console.error('❌ openFolder IPC error:', err);
       logDownloader(`❌ Error opening folder: ${err.message}`);
+    });
+});
+
+// Extract Rate Limit Errors
+extractRateLimitBtn.addEventListener('click', () => {
+  console.log('🔵 Extract Rate Limit Errors button clicked');
+  logDownloader('📊 Extracting rate limit errors to CSV...');
+  
+  window.electronAPI.extractRateLimitErrors()
+    .then((result) => {
+      console.log('✅ extractRateLimitErrors IPC returned:', result);
+      if (result.success) {
+        logDownloader(`✅ Rate limit errors saved to: ${result.filePath}`);
+      } else {
+        logDownloader(`❌ Error: ${result.error}`);
+      }
+    })
+    .catch((err) => {
+      console.error('❌ extractRateLimitErrors IPC error:', err);
+      logDownloader(`❌ Failed to extract errors: ${err.message}`);
+    });
+});
+
+// Extract Age Restriction Errors
+extractAgeRestrictionBtn.addEventListener('click', () => {
+  console.log('🔵 Extract Age Restriction Errors button clicked');
+  logDownloader('📊 Extracting age restriction errors to CSV...');
+  
+  window.electronAPI.extractAgeRestrictionErrors()
+    .then((result) => {
+      console.log('✅ extractAgeRestrictionErrors IPC returned:', result);
+      if (result.success) {
+        logDownloader(`✅ Age restriction errors saved to: ${result.filePath}`);
+      } else {
+        logDownloader(`❌ Error: ${result.error}`);
+      }
+    })
+    .catch((err) => {
+      console.error('❌ extractAgeRestrictionErrors IPC error:', err);
+      logDownloader(`❌ Failed to extract errors: ${err.message}`);
     });
 });
 

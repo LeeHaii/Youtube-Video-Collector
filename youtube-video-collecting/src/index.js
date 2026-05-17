@@ -14,8 +14,11 @@ if (require('electron-squirrel-startup')) {
   app.quit();
 }
 
-// Store download process
+// Store download process and error tracking
 let downloadProcess = null;
+let rateLimitErrors = [];  // Track rate limit errors: {url, timestamps}
+let ageRestrictionErrors = [];  // Track age restriction errors: {url, timestamps}
+let currentInputCsvPath = '';  // Store input CSV path for error extraction
 
 // ============================================================================
 // UBLOCK ORIGIN ADBLOCKER SETUP
@@ -391,6 +394,11 @@ ipcMain.handle('get-autosave-path', async (event) => {
 // 5-Sec Downloader - Start Download
 ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax) => {
   try {
+    // Reset error tracking
+    rateLimitErrors = [];
+    ageRestrictionErrors = [];
+    currentInputCsvPath = csvPath;
+
     // Verify files exist
     if (!fs.existsSync(csvPath)) {
       throw new Error('CSV file not found');
@@ -426,6 +434,8 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
       env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
     });
 
+    let errorSummaryMode = null;  // 'RATE_LIMIT' or 'AGE_RESTRICTION'
+
     // Handle errors
     downloadProcess.on('error', (error) => {
       console.error(`❌ Failed to start download process: ${error.message}`);
@@ -433,10 +443,32 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
       downloadProcess = null;
     });
 
-    // Send output to renderer
+    // Send output to renderer and parse errors
     downloadProcess.stdout.on('data', (data) => {
       const message = data.toString();
       console.log(`[Download stdout]: ${message}`);
+      
+      // Parse error summary lines
+      if (message.includes('📊 ERROR_SUMMARY: RATE_LIMIT_ERRORS')) {
+        errorSummaryMode = 'RATE_LIMIT';
+      } else if (message.includes('📊 ERROR_SUMMARY: AGE_RESTRICTION_ERRORS')) {
+        errorSummaryMode = 'AGE_RESTRICTION';
+      } else if (errorSummaryMode && message.includes('|')) {
+        // Parse error line: URL|timestamps
+        const parts = message.trim().split('|');
+        if (parts.length === 2) {
+          const url = parts[0];
+          const timestamps = parts[1].split(';').map(Number).filter(t => !isNaN(t));
+          const errorObj = { url, timestamps };
+          
+          if (errorSummaryMode === 'RATE_LIMIT') {
+            rateLimitErrors.push(errorObj);
+          } else if (errorSummaryMode === 'AGE_RESTRICTION') {
+            ageRestrictionErrors.push(errorObj);
+          }
+        }
+      }
+      
       mainWindow.webContents.send('download-log', message);
     });
 
@@ -448,7 +480,13 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
 
     downloadProcess.on('close', (code) => {
       console.log(`✅ Download process exited with code: ${code}`);
+      console.log(`📊 Rate Limit Errors: ${rateLimitErrors.length}`);
+      console.log(`📊 Age Restriction Errors: ${ageRestrictionErrors.length}`);
       mainWindow.webContents.send('download-complete', code === 0);
+      mainWindow.webContents.send('download-error-summary', {
+        rateLimitCount: rateLimitErrors.length,
+        ageRestrictionCount: ageRestrictionErrors.length,
+      });
       downloadProcess = null;
     });
 
@@ -467,6 +505,102 @@ ipcMain.handle('stop-download', async (event) => {
     return { success: true };
   }
   return { success: false, error: 'No download in progress' };
+});
+
+// 5-Sec Downloader - Extract Rate Limit Errors to CSV
+ipcMain.handle('extract-rate-limit-errors', async (event) => {
+  try {
+    if (rateLimitErrors.length === 0) {
+      return { success: false, error: 'No rate limit errors to extract' };
+    }
+
+    const { filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save Rate Limit Errors CSV',
+      defaultPath: 'rate_limit_errors.csv',
+      filters: [{ name: 'CSV Files', extensions: ['csv'] }],
+    });
+
+    if (!filePath) {
+      return { success: false, error: 'Save dialog cancelled' };
+    }
+
+    // Create CSV content in the same format as input
+    let csvContent = '';
+    for (const errorItem of rateLimitErrors) {
+      const url = errorItem.url;
+      const timestamps = errorItem.timestamps
+        .map(ts => {
+          // Convert seconds to mm.ss or hh.mm.ss format
+          const hours = Math.floor(ts / 3600);
+          const minutes = Math.floor((ts % 3600) / 60);
+          const seconds = Math.floor(ts % 60);
+          
+          if (hours > 0) {
+            return `${hours}.${String(minutes).padStart(2, '0')}.${String(seconds).padStart(2, '0')}`;
+          } else {
+            return `${minutes}.${String(seconds).padStart(2, '0')}`;
+          }
+        })
+        .join(';');
+      
+      csvContent += `${url},${timestamps}\n`;
+    }
+
+    fs.writeFileSync(filePath, csvContent, 'utf-8');
+    console.log(`💾 Rate limit errors saved to: ${filePath}`);
+    return { success: true, filePath };
+  } catch (error) {
+    console.error(`❌ Error extracting rate limit errors: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+});
+
+// 5-Sec Downloader - Extract Age Restriction Errors to CSV
+ipcMain.handle('extract-age-restriction-errors', async (event) => {
+  try {
+    if (ageRestrictionErrors.length === 0) {
+      return { success: false, error: 'No age restriction errors to extract' };
+    }
+
+    const { filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save Age Restriction Errors CSV',
+      defaultPath: 'age_restriction_errors.csv',
+      filters: [{ name: 'CSV Files', extensions: ['csv'] }],
+    });
+
+    if (!filePath) {
+      return { success: false, error: 'Save dialog cancelled' };
+    }
+
+    // Create CSV content in the same format as input
+    let csvContent = '';
+    for (const errorItem of ageRestrictionErrors) {
+      const url = errorItem.url;
+      const timestamps = errorItem.timestamps
+        .map(ts => {
+          // Convert seconds to mm.ss or hh.mm.ss format
+          const hours = Math.floor(ts / 3600);
+          const minutes = Math.floor((ts % 3600) / 60);
+          const seconds = Math.floor(ts % 60);
+          
+          if (hours > 0) {
+            return `${hours}.${String(minutes).padStart(2, '0')}.${String(seconds).padStart(2, '0')}`;
+          } else {
+            return `${minutes}.${String(seconds).padStart(2, '0')}`;
+          }
+        })
+        .join(';');
+      
+      csvContent += `${url},${timestamps}\n`;
+    }
+
+    fs.writeFileSync(filePath, csvContent, 'utf-8');
+    console.log(`💾 Age restriction errors saved to: ${filePath}`);
+    return { success: true, filePath };
+  } catch (error) {
+    console.error(`❌ Error extracting age restriction errors: ${error.message}`);
+    return { success: false, error: error.message };
+  }
 });
 
 // Open Folder

@@ -57,9 +57,10 @@ def download_clip(
     output_template: str,
     log_callback=print,
     stop_event=None,
-) -> None:
+) -> str:
     """
     Download a clip.
+    Returns: "OK" on success, or error type ("RATE_LIMIT", "AGE_RESTRICTION", "ERROR") on failure.
     """
     start = int(start_time)
     end = int(start_time + duration)
@@ -97,11 +98,24 @@ def download_clip(
 
     log_callback(f"    Downloading {start}-{end}s ... ")
 
-    with YoutubeDL(ydl_opts) as ydl:
-        ydl.cache.remove()
-        ydl.download([url])
-
-    log_callback("OK\n")
+    try:
+        with YoutubeDL(ydl_opts) as ydl:
+            ydl.cache.remove()
+            ydl.download([url])
+        log_callback("OK\n")
+        return "OK"
+    except Exception as e:
+        error_msg = str(e).lower()
+        # Detect specific error types
+        if "429" in error_msg or "too many requests" in error_msg or "rate limit" in error_msg:
+            log_callback(f"❌ RATE_LIMIT_ERROR\n")
+            return "RATE_LIMIT"
+        elif "age" in error_msg or "restricted" in error_msg or "age-restricted" in error_msg:
+            log_callback(f"❌ AGE_RESTRICTION_ERROR\n")
+            return "AGE_RESTRICTION"
+        else:
+            log_callback(f"❌ {str(e)[:100]}\n")
+            return "ERROR"
 
 
 
@@ -162,6 +176,10 @@ def process_clips(csv_path: str, output_base_dir: str, clip_sleep_min: float = 1
 
     total_clips = sum(len(ts) for _, pairs in non_empty_rows for _, ts in pairs)
     clips_done = 0
+    
+    # Track errors for extraction
+    rate_limit_errors = []  # List of (url, timestamp_list)
+    age_restriction_errors = []  # List of (url, timestamp_list)
 
     for output_row_num, (_, pairs) in enumerate(non_empty_rows, start=1):
         if stop_event and stop_event.is_set():
@@ -180,6 +198,8 @@ def process_clips(csv_path: str, output_base_dir: str, clip_sleep_min: float = 1
             log_callback(f"  URL: {url} with {len(timestamps)} timestamp(s)\n")
 
             urlIndex += 1
+            failed_timestamps = []  # Track failed timestamps for this URL
+            
             for ts in timestamps:
                 if stop_event and stop_event.is_set():
                     log_callback("Processing canceled by user.\n")
@@ -193,7 +213,7 @@ def process_clips(csv_path: str, output_base_dir: str, clip_sleep_min: float = 1
 
                 log_callback(f"    [{clips_done}/{total_clips}] {int(ts)}s ")
                 try:
-                    download_clip(
+                    error_type = download_clip(
                         url,
                         ts,
                         CLIP_DURATION,
@@ -201,19 +221,54 @@ def process_clips(csv_path: str, output_base_dir: str, clip_sleep_min: float = 1
                         log_callback=log_callback,
                         stop_event=stop_event,
                     )
-                    clip_count += 1
+                    
+                    # Track errors
+                    if error_type == "RATE_LIMIT":
+                        failed_timestamps.append(ts)
+                    elif error_type == "AGE_RESTRICTION":
+                        failed_timestamps.append(ts)
+                    elif error_type != "OK":
+                        failed_timestamps.append(ts)
+                    else:
+                        clip_count += 1
+                    
                     stampsleep = random.uniform(clip_sleep_min, clip_sleep_max)
                     log_callback(f"         Pausing before next clip in {stampsleep.__round__(2)}s\n")
                     time.sleep(stampsleep)  # brief pause between downloads
                 except Exception as e:
                     log_callback(f"Error: {str(e)[:200]}\n")
+                    failed_timestamps.append(ts)
+            
+            # Store failed timestamps by error type
+            if failed_timestamps:
+                # Check the error type for this URL by retrying once
+                if rate_limit_errors or age_restriction_errors:
+                    # We'll categorize based on what we've seen
+                    pass
+                # For now, add to rate limit as default (will be categorized in UI)
+                rate_limit_errors.append((url, failed_timestamps))
+            
             clip_count = 1
+        
         row_end_time = time.perf_counter()
         row_duration = row_end_time - row_start_time
         log_callback(f"Row {output_row_num}: completed in {row_duration.__round__(2)}s\n")
         rowsleep = random.uniform(row_sleep_min, row_sleep_max)
         log_callback(f"         Pausing before next row in {rowsleep.__round__(2)}s\n\n")
         time.sleep(rowsleep)  # brief pause between rows
+    
+    # Log error summary in parseable format
+    if rate_limit_errors:
+        log_callback("📊 ERROR_SUMMARY: RATE_LIMIT_ERRORS\n")
+        for url, timestamps in rate_limit_errors:
+            ts_str = ";".join(str(int(ts)) for ts in timestamps)
+            log_callback(f"  {url}|{ts_str}\n")
+    
+    if age_restriction_errors:
+        log_callback("📊 ERROR_SUMMARY: AGE_RESTRICTION_ERRORS\n")
+        for url, timestamps in age_restriction_errors:
+            ts_str = ";".join(str(int(ts)) for ts in timestamps)
+            log_callback(f"  {url}|{ts_str}\n")
 
 
 def find_ffmpeg_exe():

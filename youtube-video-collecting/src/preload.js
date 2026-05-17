@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openFolderDialog: () => ipcRenderer.invoke('open-folder-dialog'),
   startDownload: (csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax) => ipcRenderer.invoke('start-download', csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax),
   stopDownload: () => ipcRenderer.invoke('stop-download'),
+  extractRateLimitErrors: () => ipcRenderer.invoke('extract-rate-limit-errors'),
+  extractAgeRestrictionErrors: () => ipcRenderer.invoke('extract-age-restriction-errors'),
   openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath),
 
   // CapCut Shuffle APIs
@@ -41,6 +43,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onDownloadLog: (callback) => {
     ipcRenderer.on('download-log', (event, message) => callback(message));
+  },
+  onDownloadErrorSummary: (callback) => {
+    ipcRenderer.on('download-error-summary', (event, summary) => callback(summary));
   },
   onCapcutLog: (callback) => {
     ipcRenderer.on('capcut-log', (event, message) => callback(message));
