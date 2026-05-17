@@ -472,6 +472,10 @@ capcutProcessBtn.addEventListener('click', async () => {
   }
 
   capcutProcessBtn.disabled = false;
+  
+  // Clear all selections after processing
+  selectedProjects = {};
+  renderCapcutProjects(capcutSearchInput.value);
 });
 
 function logCapcut(message) {
@@ -735,6 +739,10 @@ effectTitleProcessBtn.addEventListener('click', async () => {
   }
 
   effectTitleProcessBtn.disabled = false;
+  
+  // Clear all selections after processing
+  selectedEffectTitleProjects = {};
+  renderEffectTitleProjects(effectTitleSearchInput.value);
 });
 
 function logEffectTitle(message) {

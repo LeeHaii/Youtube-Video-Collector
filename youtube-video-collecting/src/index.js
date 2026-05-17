@@ -1,10 +1,11 @@
-const { app, BrowserWindow, ipcMain, dialog, session } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, session, safeStorage, net } = require('electron');
 const path = require('node:path');
 const fs = require('fs');
 const { spawn, execSync } = require('child_process');
 const os = require('os');
 const { ElectronBlocker } = require('@cliqz/adblocker-electron');
 const fetch = require('node-fetch');
+const { machineIdSync } = require('node-machine-id');
 
 // Suppress MaxListenersExceededWarning
 require('events').EventEmitter.defaultMaxListeners = 15;
@@ -12,6 +13,101 @@ require('events').EventEmitter.defaultMaxListeners = 15;
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit();
+}
+
+// ============================================================================
+// LICENSING CONFIGURATION
+// ============================================================================
+
+const CONFIG_PATH = path.join(app.getPath('userData'), 'license.dat');
+// TODO: Replace with your actual Google Apps Script Web App URL
+const GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwXFqsucrSObljlRZyvucGHWo9yEuXVAVopBqs1u4erHTAVKzdT1brNB1FsGUAnkXaw/exec';
+
+console.log('🔐 License config:');
+console.log('   Config path:', CONFIG_PATH);
+console.log('   GAS URL:', GAS_WEBAPP_URL);
+
+// ============================================================================
+// LICENSING FUNCTIONS
+// ============================================================================
+
+/**
+ * Get unique hardware fingerprint for this device
+ */
+function getDeviceFingerprint() {
+  try {
+    const id = machineIdSync({ original: true });
+    console.log('✅ Device fingerprint retrieved');
+    return id;
+  } catch (error) {
+    console.error('❌ Error getting device fingerprint:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Read and decrypt stored license key from secure storage
+ */
+function getStoredKey() {
+  try {
+    if (!fs.existsSync(CONFIG_PATH)) {
+      console.log('ℹ️ No stored license found');
+      return null;
+    }
+    const encryptedData = fs.readFileSync(CONFIG_PATH);
+    const decrypted = safeStorage.decryptString(encryptedData);
+    console.log('✅ License key decrypted from storage');
+    return decrypted;
+  } catch (error) {
+    console.warn('⚠️ Failed to decrypt stored key:', error.message);
+    console.warn('   (Key may be corrupted or from different user account)');
+    return null;
+  }
+}
+
+/**
+ * Save and encrypt license key to secure storage
+ */
+function saveKeySecurely(key) {
+  try {
+    const encrypted = safeStorage.encryptString(key);
+    fs.writeFileSync(CONFIG_PATH, encrypted);
+    console.log('✅ License key encrypted and saved');
+    return true;
+  } catch (error) {
+    console.error('❌ Error saving license key:', error.message);
+    return false;
+  }
+}
+
+/**
+ * Verify license with Google Apps Script backend
+ */
+async function verifyWithServer(key) {
+  const deviceId = getDeviceFingerprint();
+  
+  if (!deviceId) {
+    return { success: false, message: 'Could not identify device' };
+  }
+
+  try {
+    console.log('📤 Sending verification request to server...');
+    const response = await net.fetch(GAS_WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: key, deviceId: deviceId })
+    });
+    
+    const result = await response.json();
+    console.log('📥 Server response:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ Network error during verification:', error.message);
+    return { 
+      success: false, 
+      message: 'Network connection error. Please check your internet and try again.' 
+    };
+  }
 }
 
 // Store download process and error tracking
@@ -115,6 +211,7 @@ const createWindow = () => {
       contextIsolation: true,
       enableRemoteModule: false,
       webviewTag: true,
+      devTools: false,
     },
   });
 
@@ -165,6 +262,44 @@ const createWindow = () => {
 };
 
 let mainWindow;
+let activationWindow;
+
+/**
+ * Create the activation window for license entry
+ */
+function createActivationWindow() {
+  activationWindow = new BrowserWindow({
+    width: 500,
+    height: 700,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      enableRemoteModule: false,
+    },
+  });
+
+  activationWindow.loadFile(path.join(__dirname, 'activation.html'));
+  
+  // Show window when ready
+  activationWindow.once('ready-to-show', () => {
+    activationWindow.show();
+  });
+
+  activationWindow.on('closed', () => {
+    activationWindow = null;
+    // If activation window closes, quit the app
+    if (!mainWindow) {
+      app.quit();
+    }
+  });
+
+  console.log('🔑 Activation window created');
+}
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
@@ -173,13 +308,52 @@ app.whenReady().then(async () => {
   // Initialize adblocker before creating window
   await initializeAdblocker();
   
-  mainWindow = createWindow();
+  // ========================================================================
+  // LICENSING CHECK - BEFORE CREATING MAIN WINDOW
+  // ========================================================================
+  
+  console.log('🔐 Starting license verification...');
+  
+  const storedKey = getStoredKey();
+  let isLicenseValid = false;
+  
+  if (storedKey) {
+    console.log('📝 Stored license found, verifying with server...');
+    const serverResponse = await verifyWithServer(storedKey);
+    
+    if (serverResponse.success) {
+      console.log('✅ License verified!');
+      isLicenseValid = true;
+    } else {
+      console.log('⚠️ License verification failed:', serverResponse.message);
+    }
+  } else {
+    console.log('ℹ️ No stored license found');
+  }
+  
+  // If license is valid, create main window
+  if (isLicenseValid) {
+    console.log('🚀 Creating main application window...');
+    mainWindow = createWindow();
+  } else {
+    // If no valid license, create activation window
+    console.log('🔓 License invalid or missing, showing activation window...');
+    createActivationWindow();
+  }
 
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow = createWindow();
+      if (!mainWindow && !activationWindow) {
+        // Check license again on reactivation
+        const storedKey = getStoredKey();
+        if (storedKey) {
+          mainWindow = createWindow();
+        } else {
+          createActivationWindow();
+        }
+      }
     }
   });
 });
@@ -196,6 +370,57 @@ app.on('window-all-closed', () => {
 // ============================================================================
 // IPC HANDLERS
 // ============================================================================
+
+// ============================================================================
+// LICENSING IPC HANDLERS
+// ============================================================================
+
+/**
+ * Submit license key for verification
+ */
+ipcMain.handle('submit-license-key', async (event, key) => {
+  console.log('📥 License key submission received');
+  
+  const serverResponse = await verifyWithServer(key);
+  
+  if (serverResponse.success) {
+    console.log('💾 Saving license key securely...');
+    saveKeySecurely(key);
+    
+    // Create main window
+    console.log('🚀 License valid, launching main application...');
+    if (mainWindow) {
+      mainWindow.close();
+    }
+    mainWindow = createWindow();
+    
+    // Close activation window
+    if (activationWindow) {
+      activationWindow.close();
+      activationWindow = null;
+    }
+  }
+  
+  return serverResponse;
+});
+
+/**
+ * Check current license status
+ */
+ipcMain.handle('check-license-status', async (event) => {
+  const storedKey = getStoredKey();
+  
+  if (!storedKey) {
+    return { hasLicense: false, verified: false };
+  }
+  
+  const verification = await verifyWithServer(storedKey);
+  return { 
+    hasLicense: !!storedKey, 
+    verified: verification.success,
+    message: verification.message 
+  };
+});
 
 // YouTube Collector - Export CSV
 ipcMain.handle('export-csv', async (event, rows) => {
