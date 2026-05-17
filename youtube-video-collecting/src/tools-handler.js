@@ -500,4 +500,256 @@ document.getElementById('fb-link-trimmer').addEventListener('click', (e) => {
   console.log('🔗 Opening Facebook link');
   window.electronAPI.openUrl('https://www.facebook.com/rhymx2k3/');
 });
+
+// ============================================================================
+// AUTO ADD EFFECT & TITLE TOOL
+// ============================================================================
+
+let allEffectTitleProjects = {}; // {folderName: folderPath}
+let selectedEffectTitleProjects = {}; // {folderName: true/false}
+
+// DOM Elements for Effect & Title Tab
+const effectTitleFolderInput = document.getElementById('effect-title-folder-path');
+const effectTitleSearchInput = document.getElementById('effect-title-search-input');
+const effectTitleProjectsList = document.getElementById('effect-title-projects-list');
+const effectTitleLog = document.getElementById('effect-title-log');
+const effectTitleProcessBtn = document.getElementById('effect-title-process-btn');
+const effectTitleAddEffectCheckbox = document.getElementById('effect-title-add-effect');
+const effectTitleAddTitleCheckbox = document.getElementById('effect-title-add-title');
+const effectTitleTextSection = document.getElementById('effect-title-text-section');
+const effectTitleExtractedSection = document.getElementById('effect-title-extracted-section');
+const effectTitleTextInput = document.getElementById('effect-title-text-input');
+const effectTitleExtractedOutput = document.getElementById('effect-title-extracted-output');
+
+// Browse Effect & Title Folder
+document.getElementById('effect-title-browse-btn').addEventListener('click', async () => {
+  console.log('🔵 Effect & Title Browse button clicked');
+  try {
+    const result = await window.electronAPI.openFolderDialog();
+    console.log('✅ openFolderDialog returned:', result);
+    if (result.folderPath) {
+      effectTitleFolderInput.value = result.folderPath;
+      console.log('📝 Effect & Title path set:', result.folderPath);
+      logEffectTitle(`✓ CapCut folder selected: ${result.folderPath}`);
+      await loadEffectTitleProjects(result.folderPath);
+    }
+  } catch (err) {
+    console.error('❌ openFolderDialog error:', err);
+    logEffectTitle(`❌ Error selecting folder: ${err.message}`);
+  }
+});
+
+// Refresh Effect & Title Projects
+document.getElementById('effect-title-refresh-btn').addEventListener('click', () => {
+  const folderPath = effectTitleFolderInput.value;
+  console.log('🔵 Refresh Projects button clicked:', folderPath);
+  
+  if (!folderPath) {
+    console.warn('❌ Folder path is empty');
+    logEffectTitle('❌ Please select a CapCut folder first');
+    return;
+  }
+  logEffectTitle('🔄 Refreshing projects...');
+  loadEffectTitleProjects(folderPath);
+});
+
+// Load Effect & Title Projects
+async function loadEffectTitleProjects(folderPath) {
+  try {
+    console.log('📤 Calling window.electronAPI.scanCapcutProjects()');
+    logEffectTitle('🔍 Scanning for CapCut projects...');
+    const result = await window.electronAPI.scanCapcutProjects(folderPath);
+    console.log('✅ scanCapcutProjects IPC returned:', result);
+
+    if (result.projects && result.projects.length > 0) {
+      console.log(`📊 Found ${result.projects.length} project(s)`);
+      allEffectTitleProjects = {};
+      result.projects.forEach(project => {
+        allEffectTitleProjects[project.name] = project.path;
+      });
+      logEffectTitle(`✓ Found ${result.projects.length} project(s)`);
+      renderEffectTitleProjects();
+    } else {
+      console.warn('⚠️ No projects found');
+      logEffectTitle('⚠️ No CapCut projects found in this folder');
+      effectTitleProjectsList.innerHTML = '';
+    }
+  } catch (err) {
+    console.error('❌ scanCapcutProjects error:', err);
+    logEffectTitle(`❌ Error scanning projects: ${err.message}`);
+  }
+}
+
+// Render Effect & Title Projects List
+function renderEffectTitleProjects(filter = '') {
+  effectTitleProjectsList.innerHTML = '';
+  const filterLower = filter.toLowerCase();
+
+  for (const [projectName, projectPath] of Object.entries(allEffectTitleProjects)) {
+    if (!filterLower || projectName.toLowerCase().includes(filterLower)) {
+      const projectDiv = document.createElement('div');
+      projectDiv.className = 'project-item';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.id = `effect-title-project-${projectName}`;
+      checkbox.checked = selectedEffectTitleProjects[projectName] || false;
+      checkbox.addEventListener('change', () => {
+        selectedEffectTitleProjects[projectName] = checkbox.checked;
+      });
+
+      const label = document.createElement('label');
+      label.htmlFor = `effect-title-project-${projectName}`;
+      label.textContent = projectName;
+
+      projectDiv.appendChild(checkbox);
+      projectDiv.appendChild(label);
+      effectTitleProjectsList.appendChild(projectDiv);
+    }
+  }
+}
+
+// Effect & Title Search Filter
+effectTitleSearchInput.addEventListener('input', (e) => {
+  const filterText = e.target.value;
+  console.log('🔍 Search filter changed:', filterText);
+  renderEffectTitleProjects(filterText);
+});
+
+// Toggle Auto Add Title Checkbox
+effectTitleAddTitleCheckbox.addEventListener('change', () => {
+  console.log('🔲 Auto Add Title checkbox changed:', effectTitleAddTitleCheckbox.checked);
+  if (effectTitleAddTitleCheckbox.checked) {
+    effectTitleTextSection.style.display = 'block';
+    effectTitleExtractedSection.style.display = 'block';
+  } else {
+    effectTitleTextSection.style.display = 'none';
+    effectTitleExtractedSection.style.display = 'none';
+    effectTitleTextInput.value = '';
+    effectTitleExtractedOutput.textContent = '';
+  }
+});
+
+// Extract Text from Input
+effectTitleTextInput.addEventListener('input', () => {
+  const inputText = effectTitleTextInput.value;
+  console.log('📝 Text input changed, extracting...');
+  
+  if (!inputText.trim()) {
+    effectTitleExtractedOutput.textContent = '';
+    return;
+  }
+
+  // Extract lines containing at least 2 keywords: "Number" and ":"
+  const keywords = [
+    'Number',
+    ':',
+    '번호',
+    'Número',
+    'Numéro',
+    '番号',];
+  const lines = inputText.split('\n');
+  const extractedLines = [];
+
+  for (const line of lines) {
+    let keywordCount = 0;
+    for (const keyword of keywords) {
+      if (line.includes(keyword)) {
+        keywordCount++;
+      }
+    }
+    if (keywordCount >= 2) {
+      const trimmedLine = line.trim();
+      if (trimmedLine) {
+        extractedLines.push(trimmedLine);
+      }
+    }
+  }
+
+  // Display extracted lines
+  if (extractedLines.length > 0) {
+    effectTitleExtractedOutput.textContent = extractedLines.join('\n');
+    console.log(`✅ Extracted ${extractedLines.length} line(s)`);
+  } else {
+    effectTitleExtractedOutput.textContent = '(No lines match the criteria)';
+  }
+});
+
+// Process Effect & Title Projects
+effectTitleProcessBtn.addEventListener('click', async () => {
+  const selectedNames = Object.keys(selectedEffectTitleProjects).filter(name => selectedEffectTitleProjects[name]);
+
+  console.log('🔵 Process Effect & Title Projects button clicked');
+  console.log('   Selected projects:', selectedNames);
+  console.log('   Add Effect:', effectTitleAddEffectCheckbox.checked);
+  console.log('   Add Title:', effectTitleAddTitleCheckbox.checked);
+
+  if (selectedNames.length === 0) {
+    console.warn('❌ No projects selected');
+    logEffectTitle('❌ Please select at least one project');
+    return;
+  }
+
+  if (!effectTitleAddEffectCheckbox.checked && !effectTitleAddTitleCheckbox.checked) {
+    console.warn('❌ No options selected');
+    logEffectTitle('❌ Please enable at least one option (Auto Add Effect or Auto Add Title)');
+    return;
+  }
+
+  if (effectTitleAddTitleCheckbox.checked && !effectTitleTextInput.value.trim()) {
+    console.warn('❌ Title text is empty');
+    logEffectTitle('❌ Please enter text for Auto Add Title');
+    return;
+  }
+
+  logEffectTitle(`🚀 Processing ${selectedNames.length} project(s)...`);
+  effectTitleProcessBtn.disabled = true;
+
+  const projectPaths = selectedNames.map(name => allEffectTitleProjects[name]);
+  const addEffect = effectTitleAddEffectCheckbox.checked;
+  const addTitle = effectTitleAddTitleCheckbox.checked;
+  const titleText = addTitle ? effectTitleTextInput.value : '';
+
+  console.log('📤 Calling window.electronAPI.processEffectTitle()');
+  console.log('   Add Effect:', addEffect);
+  console.log('   Add Title:', addTitle);
+  console.log('   Project paths:', projectPaths);
+
+  try {
+    const result = await window.electronAPI.processEffectTitle(projectPaths, addEffect, addTitle, titleText);
+    console.log('✅ processEffectTitle IPC returned:', result);
+
+    if (result.success) {
+      logEffectTitle(`✅ Successfully processed ${result.processedCount} project(s)`);
+      if (result.failed && result.failed.length > 0) {
+        logEffectTitle('⚠️ Failed projects:');
+        result.failed.forEach(f => logEffectTitle(`  - ${f}`));
+      }
+    } else {
+      console.error('❌ Processing failed:', result.error);
+      logEffectTitle(`❌ Error: ${result.error}`);
+    }
+  } catch (err) {
+    console.error('❌ processEffectTitle IPC error:', err);
+    logEffectTitle(`❌ Processing failed: ${err.message}`);
+  }
+
+  effectTitleProcessBtn.disabled = false;
+});
+
+function logEffectTitle(message) {
+  const timestamp = new Date().toLocaleTimeString();
+  const line = `[${timestamp}] ${message}\n`;
+  console.log(`📝 [Effect & Title Log]: ${message}`);
+  effectTitleLog.textContent += line;
+  effectTitleLog.scrollTop = effectTitleLog.scrollHeight;
+}
+
+// Facebook link
+document.getElementById('fb-link-effect-title').addEventListener('click', (e) => {
+  e.preventDefault();
+  console.log('🔗 Opening Facebook link');
+  window.electronAPI.openUrl('https://www.facebook.com/rhymx2k3/');
+});
+
 console.log('✅ Tools Handler fully initialized');

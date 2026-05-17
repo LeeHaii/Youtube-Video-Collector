@@ -749,6 +749,185 @@ ipcMain.handle('open-url', async (event, url) => {
   }
 });
 
+// Auto Add Effect & Title - Process Projects
+ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, addTitle, titleText) => {
+  try {
+    // Find Python executable
+    const pythonExe = findPythonExecutable();
+    if (!pythonExe) {
+      throw new Error('Python not found. Please install Python and add to PATH.');
+    }
+
+    // Get paths to the Python scripts
+    const autoEffectScriptPath = path.join(__dirname, '..', 'tools', 'auto_add_effect.py');
+    const autoTitleScriptPath = path.join(__dirname, '..', 'tools', 'auto_add_title.py');
+    
+    if (addEffect && !fs.existsSync(autoEffectScriptPath)) {
+      throw new Error(`auto_add_effect.py not found: ${autoEffectScriptPath}`);
+    }
+
+    if (addTitle && !fs.existsSync(autoTitleScriptPath)) {
+      throw new Error(`auto_add_title.py not found: ${autoTitleScriptPath}`);
+    }
+
+    console.log(`🎨 Starting Auto Add Effect & Title`);
+    console.log(`📄 Auto Effect Script: ${autoEffectScriptPath}`);
+    console.log(`📄 Auto Title Script: ${autoTitleScriptPath}`);
+    console.log(`🎯 Projects to process: ${projectPaths.length}`);
+    console.log(`✨ Add Effect: ${addEffect}, Add Title: ${addTitle}`);
+
+    // Extract text lines from titleText if adding title
+    let extractedTexts = [];
+    if (addTitle && titleText.trim()) {
+      const keywords = ['Number', ':'];
+      const lines = titleText.split('\n');
+      
+      for (const line of lines) {
+        let keywordCount = 0;
+        for (const keyword of keywords) {
+          if (line.includes(keyword)) {
+            keywordCount++;
+          }
+        }
+        if (keywordCount >= 2) {
+          const trimmedLine = line.trim();
+          if (trimmedLine) {
+            extractedTexts.push(trimmedLine);
+          }
+        }
+      }
+
+      console.log(`📝 Extracted ${extractedTexts.length} text line(s) from input`);
+      if (extractedTexts.length === 0) {
+        throw new Error('No lines matching the criteria (must contain both "Number" and ":") were found in the input text.');
+      }
+    }
+
+    let processedCount = 0;
+    const failed = [];
+
+    for (let i = 0; i < projectPaths.length; i++) {
+      const projectPath = projectPaths[i];
+      
+      if (!fs.existsSync(projectPath)) {
+        console.warn(`⚠️ Project path not found: ${projectPath}`);
+        failed.push(`${path.basename(projectPath)}: Path not found`);
+        continue;
+      }
+
+      console.log(`\n[${i + 1}/${projectPaths.length}] Processing: ${projectPath}`);
+
+      try {
+        // Process Auto Add Effect
+        if (addEffect) {
+          console.log(`  ✨ Running Auto Add Effect...`);
+          await new Promise((resolve, reject) => {
+            const effectArgs = [autoEffectScriptPath, projectPath];
+            
+            const python = spawn(pythonExe, effectArgs, {
+              stdio: 'pipe',
+              shell: false,
+              env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+            });
+
+            let output = '';
+
+            python.on('error', (error) => {
+              console.error(`❌ Failed to start auto_add_effect: ${error.message}`);
+              mainWindow.webContents.send('capcut-log', `❌ ERROR: Failed to start auto_add_effect: ${error.message}\n`);
+              reject(new Error(`Auto Add Effect failed to start: ${error.message}`));
+            });
+
+            python.stdout.on('data', (data) => {
+              const message = data.toString();
+              output += message;
+              console.log(`[auto_add_effect stdout]: ${message}`);
+              mainWindow.webContents.send('capcut-log', message);
+            });
+
+            python.stderr.on('data', (data) => {
+              const message = data.toString();
+              output += message;
+              console.error(`[auto_add_effect stderr]: ${message}`);
+              mainWindow.webContents.send('capcut-log', `ERROR: ${message}`);
+            });
+
+            python.on('close', (code) => {
+              console.log(`✅ auto_add_effect exited with code: ${code}`);
+              if (code === 0) {
+                resolve();
+              } else {
+                reject(new Error(`auto_add_effect exited with code ${code}`));
+              }
+            });
+          });
+        }
+
+        // Process Auto Add Title
+        if (addTitle && extractedTexts.length > 0) {
+          console.log(`  📝 Running Auto Add Title with ${extractedTexts.length} text line(s)...`);
+          // Pass the project path and extracted texts as command-line arguments
+          await new Promise((resolve, reject) => {
+            const textsJson = JSON.stringify(extractedTexts);
+            const autoTitleArgs = [autoTitleScriptPath, projectPath, textsJson];
+            
+            const python = spawn(pythonExe, autoTitleArgs, {
+              stdio: 'pipe',
+              shell: false,
+              env: { 
+                ...process.env, 
+                PYTHONIOENCODING: 'utf-8',
+              },
+            });
+
+            let output = '';
+
+            python.on('error', (error) => {
+              console.error(`❌ Failed to start auto_add_title: ${error.message}`);
+              mainWindow.webContents.send('capcut-log', `❌ ERROR: Failed to start auto_add_title: ${error.message}\n`);
+              reject(new Error(`Auto Add Title failed to start: ${error.message}`));
+            });
+
+            python.stdout.on('data', (data) => {
+              const message = data.toString();
+              output += message;
+              console.log(`[auto_add_title stdout]: ${message}`);
+              mainWindow.webContents.send('capcut-log', message);
+            });
+
+            python.stderr.on('data', (data) => {
+              const message = data.toString();
+              output += message;
+              console.error(`[auto_add_title stderr]: ${message}`);
+              mainWindow.webContents.send('capcut-log', `ERROR: ${message}`);
+            });
+
+            python.on('close', (code) => {
+              console.log(`✅ auto_add_title exited with code: ${code}`);
+              if (code === 0) {
+                resolve();
+              } else {
+                reject(new Error(`auto_add_title exited with code ${code}`));
+              }
+            });
+          });
+        }
+
+        processedCount++;
+        console.log(`✅ Successfully processed project ${i + 1}`);
+      } catch (err) {
+        console.error(`❌ Error processing project: ${err.message}`);
+        failed.push(`${path.basename(projectPath)}: ${err.message}`);
+      }
+    }
+
+    return { success: true, processedCount, failed };
+  } catch (error) {
+    console.error(`❌ Auto Add Effect & Title error: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.on('webview-message', (event, { channel, args }) => {
   // Forward messages from webview to renderer
   mainWindow.webContents.send(channel, ...args);

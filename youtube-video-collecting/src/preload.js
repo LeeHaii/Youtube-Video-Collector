@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   scanCapcutProjects: (folderPath) => ipcRenderer.invoke('scan-capcut-projects', folderPath),
   processCapcutProjects: (projectPaths, cacheBust) => ipcRenderer.invoke('process-capcut-projects', projectPaths, cacheBust),
 
+  // Auto Add Effect & Title APIs
+  processEffectTitle: (projectPaths, addEffect, addTitle, titleText) => ipcRenderer.invoke('process-effect-title', projectPaths, addEffect, addTitle, titleText),
+
   // CapCut Auto Render APIs
   scanRenderProjects: (folderPath) => ipcRenderer.invoke('scan-render-projects', folderPath),
   startCapcutAutoRender: (projectPaths, delays) => ipcRenderer.invoke('start-capcut-auto-render', projectPaths, delays),

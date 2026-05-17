@@ -252,7 +252,8 @@ body {
 .log-output {
   flex: 1;
   background-color: #1a202c;
-  color: #c6f6d5;
+  /*color: #c6f6d5;*/
+  color: white;
   padding: 12px 14px;
   border-radius: 4px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;

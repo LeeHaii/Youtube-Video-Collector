@@ -13,6 +13,7 @@
         <button class="tab-btn" data-tab="downloader-tab">5-Sec Downloader</button>
         <button class="tab-btn" data-tab="trimmer-tab">YouTube Trimmer</button>
         <button class="tab-btn" data-tab="capcut-tab">CapCut Shuffle</button>
+        <button class="tab-btn" data-tab="capcut-effect-title-tab">Auto Add Effect & Title</button>
         <button class="tab-btn" data-tab="capcut-render-tab">CapCut Auto Render</button>
       </div>
 
@@ -427,6 +428,82 @@
           <div class="tool-footer">
             <span>© 2026 TranDucThang's CapCut Auto Render</span>
             <a href="#" id="fb-link-render">Facebook</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 6: Auto Add Effect & Title -->
+      <div id="capcut-effect-title-tab" class="tab-content">
+        <div class="tool-container">
+          <h1>Auto Add Effect & Title</h1>
+
+          <!-- Folder Selection -->
+          <div class="form-section">
+            <label class="form-label" style="font-weight: bold;">CapCut Master Folder:</label>
+            <div class="file-input-group">
+              <input type="text" id="effect-title-folder-path" class="file-input" readonly placeholder="No folder selected" />
+              <button id="effect-title-browse-btn" class="btn-secondary">Browse</button>
+              <button id="effect-title-refresh-btn" class="btn-secondary">Refresh</button>
+            </div>
+          </div>
+
+          <!-- Search Section -->
+          <div class="form-section">
+            <label class="form-label" style="font-weight: bold;">Search Projects:</label>
+            <input type="text" id="effect-title-search-input" class="form-input" placeholder="Type to filter projects..." />
+          </div>
+
+          <!-- Projects List -->
+          <div class="form-section">
+            <label class="form-label" style="font-weight: bold;">Select Projects to Process:</label>
+            <div id="effect-title-projects-list" class="projects-list"></div>
+          </div>
+
+          <!-- Auto Add Effect Checkbox -->
+          <div class="form-section checkbox-section">
+            <label class="checkbox-label">
+              <input type="checkbox" id="effect-title-add-effect" checked />
+              Auto Add Effect
+            </label>
+          </div>
+
+          <!-- Auto Add Title Checkbox & Fields -->
+          <div class="form-section checkbox-section">
+            <label class="checkbox-label">
+              <input type="checkbox" id="effect-title-add-title" />
+              Auto Add Title
+            </label>
+          </div>
+
+          <!-- Title Text Input (Hidden by Default) -->
+          <div class="form-section" id="effect-title-text-section" style="display: none;">
+            <label class="form-label" style="font-weight: bold;">Input Text:</label>
+            <textarea id="effect-title-text-input" class="form-input" placeholder="Paste your text here..." style="min-height: 120px; resize: vertical; font-family: monospace;"></textarea>
+          </div>
+
+          <!-- Extracted Text Display (Hidden by Default) -->
+          <div class="form-section" id="effect-title-extracted-section" style="display: none;">
+            <label class="form-label" style="font-weight: bold;">Extracted Text:</label>
+            <div id="effect-title-extracted-output" class="log-output" style="max-height: 200px; overflow-y: auto; color:black; background-color: #ffffff; border: 1px solid #cbd5e0; border-radius: 4px; padding: 10px; font-family: monospace; white-space: pre-wrap; word-wrap: break-word;"></div>
+          </div>
+
+          <!-- Process Button -->
+          <div class="form-section">
+            <button id="effect-title-process-btn" class="btn-primary" style="width: 100%; padding: 15px; font-size: 16px;">
+              Process Selected Projects
+            </button>
+          </div>
+
+          <!-- Log Area -->
+          <div class="log-section">
+            <label class="form-label">Status:</label>
+            <div id="effect-title-log" class="log-output"></div>
+          </div>
+
+          <!-- Footer -->
+          <div class="tool-footer">
+            <span>© 2026 TranDucThang's Auto Effect & Title</span>
+            <a href="#" id="fb-link-effect-title">Facebook</a>
           </div>
         </div>
       </div>
