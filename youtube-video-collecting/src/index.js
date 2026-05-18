@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, session, safeStorage, net } = require('electron');
 const path = require('node:path');
 const fs = require('fs');
-const { spawn, execSync } = require('child_process');
+const { spawn, execFile, execSync } = require('child_process');
 const os = require('os');
 const { ElectronBlocker } = require('@cliqz/adblocker-electron');
 const fetch = require('node-fetch');
@@ -143,7 +143,21 @@ async function initializeAdblocker() {
 // ============================================================================
 
 /**
+ * Get the correct path to a compiled executable based on whether app is packaged
+ */
+function getExecutablePath(exeName) {
+  if (app.isPackaged) {
+    // In packaged app: executables are in extraResources/dist folder
+    return path.join(process.resourcesPath, 'dist', `${exeName}.exe`);
+  } else {
+    // In development: executables are in the local dist folder
+    return path.join(__dirname, '..', 'dist', `${exeName}.exe`);
+  }
+}
+
+/**
  * Find Python executable in system PATH or common installation locations
+ * (Legacy function kept for backward compatibility)
  */
 function findPythonExecutable() {
   try {
@@ -633,31 +647,24 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
       throw new Error('Output folder not found');
     }
 
-    // Find Python executable
-    const pythonExe = findPythonExecutable();
-    if (!pythonExe) {
-      throw new Error('Python not found. Please install Python and add to PATH.');
-    }
-
-    // Get the path to the Python script
-    const pythonScriptPath = path.join(__dirname, '..', 'tools', '5_sec_downloader.py');
+    // Get the path to the compiled executable
+    const exePath = getExecutablePath('5_sec_downloader');
     
-    if (!fs.existsSync(pythonScriptPath)) {
-      throw new Error(`Python script not found: ${pythonScriptPath}`);
+    if (!fs.existsSync(exePath)) {
+      throw new Error(`Executable not found: ${exePath}. Please run "npm run build-exe" first.`);
     }
 
-    console.log(`🐍 Starting 5-Sec Downloader with Python: ${pythonExe}`);
-    console.log(`📄 Script: ${pythonScriptPath}`);
+    console.log(`🚀 Starting 5-Sec Downloader Executable`);
+    console.log(`📄 Executable: ${exePath}`);
     console.log(`📋 CSV: ${csvPath}`);
     console.log(`📁 Output: ${outputPath}`);
     console.log(`⏱️  Clip Sleep: ${clipSleepMin}-${clipSleepMax}s`);
     console.log(`⏱️  Row Sleep: ${rowSleepMin}-${rowSleepMax}s`);
 
-    // Spawn Python process WITHOUT shell to properly handle spaces in paths
-    downloadProcess = spawn(pythonExe, [pythonScriptPath, csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax], {
+    // Spawn executable process WITHOUT shell to properly handle spaces in paths
+    downloadProcess = spawn(exePath, [csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax], {
       stdio: 'pipe',
       shell: false,
-      env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
     });
 
     let errorSummaryMode = null;  // 'RATE_LIMIT' or 'AGE_RESTRICTION'
@@ -877,21 +884,15 @@ ipcMain.handle('scan-capcut-projects', async (event, folderPath) => {
 // CapCut - Process Projects
 ipcMain.handle('process-capcut-projects', async (event, projectPaths, cacheBust) => {
   try {
-    // Find Python executable
-    const pythonExe = findPythonExecutable();
-    if (!pythonExe) {
-      throw new Error('Python not found. Please install Python and add to PATH.');
-    }
-
-    // Get the path to the Python script
-    const pythonScriptPath = path.join(__dirname, '..', 'tools', 'suffle_capcu_track.py');
+    // Get the path to the compiled executable
+    const exePath = getExecutablePath('suffle_capcu_track');
     
-    if (!fs.existsSync(pythonScriptPath)) {
-      throw new Error(`Python script not found: ${pythonScriptPath}`);
+    if (!fs.existsSync(exePath)) {
+      throw new Error(`Executable not found: ${exePath}. Please run "npm run build-exe" first.`);
     }
 
-    console.log(`🎬 Starting CapCut Shuffle with Python: ${pythonExe}`);
-    console.log(`📄 Script: ${pythonScriptPath}`);
+    console.log(`🎬 Starting CapCut Shuffle Executable`);
+    console.log(`📄 Executable: ${exePath}`);
     console.log(`🎯 Projects to process: ${projectPaths.length}`);
     console.log(`🔄 Cache bust: ${cacheBust}`);
 
@@ -911,10 +912,9 @@ ipcMain.handle('process-capcut-projects', async (event, projectPaths, cacheBust)
 
       try {
         await new Promise((resolve, reject) => {
-          const python = spawn(pythonExe, [pythonScriptPath, projectPath, cacheBust ? '1' : '0'], {
+          const python = spawn(exePath, [projectPath, cacheBust ? '1' : '0'], {
             stdio: 'pipe',
             shell: false,
-            env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
           });
 
           let output = '';
@@ -978,34 +978,28 @@ ipcMain.handle('open-url', async (event, url) => {
 // Auto Add Effect & Title - Process Projects
 ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, addTitle, titleText) => {
   try {
-    // Find Python executable
-    const pythonExe = findPythonExecutable();
-    if (!pythonExe) {
-      throw new Error('Python not found. Please install Python and add to PATH.');
-    }
-
-    // Get paths to the Python scripts
-    const autoEffectScriptPath = path.join(__dirname, '..', 'tools', 'auto_add_effect.py');
-    const autoTitleScriptPath = path.join(__dirname, '..', 'tools', 'auto_add_title.py');
+    // Get paths to the compiled executables
+    const autoEffectExePath = getExecutablePath('auto_add_effect');
+    const autoTitleExePath = getExecutablePath('auto_add_title');
     
-    if (addEffect && !fs.existsSync(autoEffectScriptPath)) {
-      throw new Error(`auto_add_effect.py not found: ${autoEffectScriptPath}`);
+    if (addEffect && !fs.existsSync(autoEffectExePath)) {
+      throw new Error(`auto_add_effect.exe not found: ${autoEffectExePath}. Please run "npm run build-exe" first.`);
     }
 
-    if (addTitle && !fs.existsSync(autoTitleScriptPath)) {
-      throw new Error(`auto_add_title.py not found: ${autoTitleScriptPath}`);
+    if (addTitle && !fs.existsSync(autoTitleExePath)) {
+      throw new Error(`auto_add_title.exe not found: ${autoTitleExePath}. Please run "npm run build-exe" first.`);
     }
 
     console.log(`🎨 Starting Auto Add Effect & Title`);
-    console.log(`📄 Auto Effect Script: ${autoEffectScriptPath}`);
-    console.log(`📄 Auto Title Script: ${autoTitleScriptPath}`);
+    console.log(`📄 Auto Effect Executable: ${autoEffectExePath}`);
+    console.log(`📄 Auto Title Executable: ${autoTitleExePath}`);
     console.log(`🎯 Projects to process: ${projectPaths.length}`);
     console.log(`✨ Add Effect: ${addEffect}, Add Title: ${addTitle}`);
 
     // Extract text lines from titleText if adding title
     let extractedTexts = [];
     if (addTitle && titleText.trim()) {
-      const keywords = ['Number', ':'];
+      const keywords = ['Number', ':', 'Numéro', 'No.', '번호','Número','番号',];
       const lines = titleText.split('\n');
       
       for (const line of lines) {
@@ -1048,37 +1042,34 @@ ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, ad
         if (addEffect) {
           console.log(`  ✨ Running Auto Add Effect...`);
           await new Promise((resolve, reject) => {
-            const effectArgs = [autoEffectScriptPath, projectPath];
-            
-            const python = spawn(pythonExe, effectArgs, {
+            const process = spawn(autoEffectExePath, [projectPath], {
               stdio: 'pipe',
               shell: false,
-              env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
             });
 
             let output = '';
 
-            python.on('error', (error) => {
+            process.on('error', (error) => {
               console.error(`❌ Failed to start auto_add_effect: ${error.message}`);
               mainWindow.webContents.send('capcut-log', `❌ ERROR: Failed to start auto_add_effect: ${error.message}\n`);
               reject(new Error(`Auto Add Effect failed to start: ${error.message}`));
             });
 
-            python.stdout.on('data', (data) => {
+            process.stdout.on('data', (data) => {
               const message = data.toString();
               output += message;
               console.log(`[auto_add_effect stdout]: ${message}`);
               mainWindow.webContents.send('capcut-log', message);
             });
 
-            python.stderr.on('data', (data) => {
+            process.stderr.on('data', (data) => {
               const message = data.toString();
               output += message;
               console.error(`[auto_add_effect stderr]: ${message}`);
               mainWindow.webContents.send('capcut-log', `ERROR: ${message}`);
             });
 
-            python.on('close', (code) => {
+            process.on('close', (code) => {
               console.log(`✅ auto_add_effect exited with code: ${code}`);
               if (code === 0) {
                 resolve();
@@ -1095,40 +1086,35 @@ ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, ad
           // Pass the project path and extracted texts as command-line arguments
           await new Promise((resolve, reject) => {
             const textsJson = JSON.stringify(extractedTexts);
-            const autoTitleArgs = [autoTitleScriptPath, projectPath, textsJson];
             
-            const python = spawn(pythonExe, autoTitleArgs, {
+            const process = spawn(autoTitleExePath, [projectPath, textsJson], {
               stdio: 'pipe',
               shell: false,
-              env: { 
-                ...process.env, 
-                PYTHONIOENCODING: 'utf-8',
-              },
             });
 
             let output = '';
 
-            python.on('error', (error) => {
+            process.on('error', (error) => {
               console.error(`❌ Failed to start auto_add_title: ${error.message}`);
               mainWindow.webContents.send('capcut-log', `❌ ERROR: Failed to start auto_add_title: ${error.message}\n`);
               reject(new Error(`Auto Add Title failed to start: ${error.message}`));
             });
 
-            python.stdout.on('data', (data) => {
+            process.stdout.on('data', (data) => {
               const message = data.toString();
               output += message;
               console.log(`[auto_add_title stdout]: ${message}`);
               mainWindow.webContents.send('capcut-log', message);
             });
 
-            python.stderr.on('data', (data) => {
+            process.stderr.on('data', (data) => {
               const message = data.toString();
               output += message;
               console.error(`[auto_add_title stderr]: ${message}`);
               mainWindow.webContents.send('capcut-log', `ERROR: ${message}`);
             });
 
-            python.on('close', (code) => {
+            process.on('close', (code) => {
               console.log(`✅ auto_add_title exited with code: ${code}`);
               if (code === 0) {
                 resolve();
@@ -1167,28 +1153,21 @@ ipcMain.handle('trim-youtube-video', async (event, url, startSeconds, endSeconds
       throw new Error('Output folder not found');
     }
 
-    // Find Python executable
-    const pythonExe = findPythonExecutable();
-    if (!pythonExe) {
-      throw new Error('Python not found. Please install Python and add to PATH.');
-    }
-
-    // Get the path to the Python script
-    const pythonScriptPath = path.join(__dirname, '..', 'tools', 'youtube_trimmer.py');
+    // Get the path to the compiled executable
+    const exePath = getExecutablePath('youtube_trimmer');
     
-    if (!fs.existsSync(pythonScriptPath)) {
-      throw new Error(`Python script not found: ${pythonScriptPath}`);
+    if (!fs.existsSync(exePath)) {
+      throw new Error(`Executable not found: ${exePath}. Please run "npm run build-exe" first.`);
     }
 
-    console.log(`✂️ Starting YouTube Trimmer with Python: ${pythonExe}`);
-    console.log(`📄 Script: ${pythonScriptPath}`);
+    console.log(`✂️ Starting YouTube Trimmer Executable`);
+    console.log(`📄 Executable: ${exePath}`);
     console.log(`🎬 URL: ${url}`);
     console.log(`⏱️ Trim: ${startSeconds}s to ${endSeconds}s`);
     console.log(`📁 Output: ${outputPath}`);
 
-    // Spawn Python process
-    const trimProcess = spawn(pythonExe, [
-      pythonScriptPath,
+    // Spawn executable process
+    const trimProcess = spawn(exePath, [
       url,
       startSeconds.toString(),
       endSeconds.toString(),
@@ -1196,7 +1175,6 @@ ipcMain.handle('trim-youtube-video', async (event, url, startSeconds, endSeconds
     ], {
       stdio: 'pipe',
       shell: false,
-      env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
     });
 
     let trimmedFilePath = '';
@@ -1300,16 +1278,14 @@ ipcMain.handle('start-capcut-auto-render', async (event, selectedProjects, delay
       return { success: false, error: 'Render process already running' };
     }
 
-    // Find Python executable
-    const pythonPath = findPythonExecutable();
-    if (!pythonPath) {
-      const errorMsg = 'Python not found. Please install Python from https://www.python.org/';
+    // Get the path to the compiled executable
+    const exePath = getExecutablePath('capcut_auto_render');
+    
+    if (!fs.existsSync(exePath)) {
+      const errorMsg = `Executable not found: ${exePath}. Please run "npm run build-exe" first.`;
       mainWindow.webContents.send('capcut-render-log', `❌ ${errorMsg}`);
       return { success: false, error: errorMsg };
     }
-
-    // Get Python script path
-    const pyScriptPath = path.join(__dirname, '..', 'tools', 'capcut_auto_render.py');
 
     if (!fs.existsSync(pyScriptPath)) {
       const errorMsg = `Python script not found at ${pyScriptPath}`;
@@ -1323,11 +1299,11 @@ ipcMain.handle('start-capcut-auto-render', async (event, selectedProjects, delay
 
     // Log start message
     mainWindow.webContents.send('capcut-render-log', `🚀 Starting CapCut Auto Render for ${selectedProjects.length} projects`);
-    mainWindow.webContents.send('capcut-render-log', `📍 Using Python: ${pythonPath}`);
+    mainWindow.webContents.send('capcut-render-log', `📍 Using Executable: ${exePath}`);
     mainWindow.webContents.send('capcut-render-log', `⏱️ Delays: Step 1-2=${delays.step1_2}s, Step 3=${delays.step3}s, Step 4=${delays.step4}s, Step 5=${delays.step5}s, Step 6=${delays.step6}s, Step 7=${delays.step7}s, Step 8=${delays.step8}s, Step 9-10=${delays.step9_10}s`);
 
-    // Spawn Python process
-    capcutRenderProcess = spawn(pythonPath, [pyScriptPath, projectList, delaysStr], {
+    // Spawn executable process
+    capcutRenderProcess = spawn(exePath, [projectList, delaysStr], {
       stdio: 'pipe',
       shell: false,
     });

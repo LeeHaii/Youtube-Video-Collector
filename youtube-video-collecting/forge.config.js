@@ -5,6 +5,9 @@ module.exports = {
   packagerConfig: {
     asar: true,
     icon: 'assets/chitoge.ico',
+    extraResource: [
+      './dist',
+    ],
   },
   rebuildConfig: {},
   makers: [
