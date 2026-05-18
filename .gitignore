@@ -92,3 +92,41 @@ typings/
 out/
 youtube-video-collecting/package.json
 youtube-video-collecting/package-lock.json
+
+# Build artifacts
+dist/
+out/
+build/
+*.spec.js
+
+# OS files
+.DS_Store
+Thumbs.db
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Electron Forge
+.webpack/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage/
+.nyc_output/
