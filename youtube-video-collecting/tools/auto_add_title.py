@@ -1,9 +1,13 @@
+import io
 import os
 import json
 import uuid
 import copy
 import sys
 import ast
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 def format_time(microseconds):
     """Converts microseconds to mm:ss format."""
