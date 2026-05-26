@@ -77,7 +77,7 @@ def extract_text_by_keywords(text_input, keywords):
     return extracted_lines
 
 
-def update_all_capcut_drafts(project_folder_path, text_vars, split_mode="balanced"):
+def update_all_capcut_drafts(project_folder_path, text_vars, split_mode="balanced", log_markers_time=True):
     # 1. Recursively find all files named 'draft_content.json'
     draft_files = []
     for root, dirs, files in os.walk(project_folder_path):
@@ -112,11 +112,12 @@ def update_all_capcut_drafts(project_folder_path, text_vars, split_mode="balance
         markers = time_marks_data.get('mark_items', []) if time_marks_data else []
         markers.sort(key=lambda x: x['time_range']['start'])
 
-        # Log timing for even indices
-        print("  -> Timeline Log (Even Indices):")
-        for i in range(0, len(markers), 2):
-            t = markers[i]['time_range']['start']
-            print(f"     Index {i} | {markers[i]['title']} starts at {format_time(t)}")
+        # Log timing for even indices (if enabled)
+        if log_markers_time:
+            print("  -> Timeline Log (Even Indices):")
+            for i in range(0, len(markers), 2):
+                t = markers[i]['time_range']['start']
+                print(f"     Index {i} | {markers[i]['title']} starts at {format_time(t)}")
 
         # Detect Template (Text track with exactly 1 segment)
         template_track = next((t for t in data['tracks'] if t['type'] == 'text' and len(t['segments']) == 1), None)
@@ -193,7 +194,7 @@ DEFAULT_TEXTS = [
 # Check if arguments are provided (called from UI)
 if __name__ == '__main__':
     if len(sys.argv) >= 3:
-        # Called from Electron: python auto_add_title.py <project_folder> <texts_json>
+        # Called from Electron: python auto_add_title.py <project_folder> <texts_json> [--log-markers-time]
         PROJECT_FOLDER = sys.argv[1]
         try:
             my_texts = json.loads(sys.argv[2])
@@ -202,16 +203,22 @@ if __name__ == '__main__':
         except (json.JSONDecodeError, ValueError):
             print(f"Error: Invalid texts JSON format: {sys.argv[2]}")
             my_texts = DEFAULT_TEXTS
+        
+        # Check for log-markers-time flag
+        log_markers_time = '--log-markers-time' in sys.argv
     elif len(sys.argv) >= 2:
         # Called with just project folder
         PROJECT_FOLDER = sys.argv[1]
         my_texts = DEFAULT_TEXTS
+        log_markers_time = '--log-markers-time' in sys.argv
     else:
         # Default: use hardcoded values
         my_texts = DEFAULT_TEXTS
+        log_markers_time = True
 
     print(f"Using folder: {PROJECT_FOLDER}")
     print(f"Using {len(my_texts)} text(s)")
+    print(f"Log Markers Time: {log_markers_time}")
     
     # You can choose either "balanced" or "strict" here depending on your design preference
-    update_all_capcut_drafts(PROJECT_FOLDER, my_texts, split_mode="balanced")
+    update_all_capcut_drafts(PROJECT_FOLDER, my_texts, split_mode="balanced", log_markers_time=log_markers_time)

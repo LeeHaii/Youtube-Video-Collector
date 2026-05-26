@@ -165,7 +165,14 @@ def parse_input_csv(csv_path: str):
     return rows
 
 
-def process_clips(csv_path: str, output_base_dir: str, clip_sleep_min: float = 1.0, clip_sleep_max: float = 2.0, row_sleep_min: float = 10.0, row_sleep_max: float = 15.0, log_callback=print, stop_event=None) -> None:
+def check_stop_flag(stop_flag_path: str) -> bool:
+    """Check if stop flag file exists (indicates user requested stop)"""
+    if stop_flag_path and Path(stop_flag_path).exists():
+        return True
+    return False
+
+
+def process_clips(csv_path: str, output_base_dir: str, clip_sleep_min: float = 1.0, clip_sleep_max: float = 2.0, row_sleep_min: float = 10.0, row_sleep_max: float = 15.0, log_callback=print, stop_event=None, stop_flag_path: str = None) -> None:
     rows = parse_input_csv(csv_path)
 
     # Filter out empty rows and count only non-empty rows
@@ -182,7 +189,8 @@ def process_clips(csv_path: str, output_base_dir: str, clip_sleep_min: float = 1
     age_restriction_errors = []  # List of (url, timestamp_list)
 
     for output_row_num, (_, pairs) in enumerate(non_empty_rows, start=1):
-        if stop_event and stop_event.is_set():
+        # Check both stop_event and stop_flag_path
+        if (stop_event and stop_event.is_set()) or check_stop_flag(stop_flag_path):
             log_callback("Processing canceled by user.\n")
             return
 
@@ -201,7 +209,8 @@ def process_clips(csv_path: str, output_base_dir: str, clip_sleep_min: float = 1
             failed_timestamps = []  # Track failed timestamps for this URL
             
             for ts in timestamps:
-                if stop_event and stop_event.is_set():
+                # Check both stop_event and stop_flag_path
+                if (stop_event and stop_event.is_set()) or check_stop_flag(stop_flag_path):
                     log_callback("Processing canceled by user.\n")
                     return
 
@@ -298,8 +307,8 @@ def find_ffmpeg_exe():
 def main():
     """CLI entry point for 5-Sec Downloader."""
     if len(sys.argv) < 3:
-        print("Usage: python 5_sec_downloader.py <csv_path> <output_path> [clip_sleep_min] [clip_sleep_max] [row_sleep_min] [row_sleep_max]")
-        print("Example: python 5_sec_downloader.py input.csv ./output 1 2 10 15")
+        print("Usage: python 5_sec_downloader.py <csv_path> <output_path> [clip_sleep_min] [clip_sleep_max] [row_sleep_min] [row_sleep_max] [stop_flag_path]")
+        print("Example: python 5_sec_downloader.py input.csv ./output 1 2 10 15 /tmp/stop.txt")
         sys.exit(1)
     
     csv_path = sys.argv[1]
@@ -310,6 +319,9 @@ def main():
     clip_sleep_max = float(sys.argv[4]) if len(sys.argv) > 4 else 2.0
     row_sleep_min = float(sys.argv[5]) if len(sys.argv) > 5 else 10.0
     row_sleep_max = float(sys.argv[6]) if len(sys.argv) > 6 else 15.0
+    
+    # Parse optional stop flag path (for graceful shutdown)
+    stop_flag_path = sys.argv[7] if len(sys.argv) > 7 else None
     
     # Validate inputs
     if not Path(csv_path).exists():
@@ -335,9 +347,13 @@ def main():
         print(f"   CSV: {csv_path}")
         print(f"   Output: {output_path}")
         print(f"   Clip Sleep: {clip_sleep_min}-{clip_sleep_max}s")
-        print(f"   Row Sleep: {row_sleep_min}-{row_sleep_max}s\n")
+        print(f"   Row Sleep: {row_sleep_min}-{row_sleep_max}s")
+        if stop_flag_path:
+            print(f"   Stop flag: {stop_flag_path}\n")
+        else:
+            print()
         
-        process_clips(csv_path, output_path, clip_sleep_min, clip_sleep_max, row_sleep_min, row_sleep_max, log_callback=print)
+        process_clips(csv_path, output_path, clip_sleep_min, clip_sleep_max, row_sleep_min, row_sleep_max, log_callback=print, stop_flag_path=stop_flag_path)
         
         print("\n✅ Processing completed successfully!")
         sys.exit(0)

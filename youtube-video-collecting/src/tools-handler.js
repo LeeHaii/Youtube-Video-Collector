@@ -687,16 +687,11 @@ effectTitleProcessBtn.addEventListener('click', async () => {
   console.log('   Selected projects:', selectedNames);
   console.log('   Add Effect:', effectTitleAddEffectCheckbox.checked);
   console.log('   Add Title:', effectTitleAddTitleCheckbox.checked);
+  console.log('   Log Markers Time:', document.getElementById('effect-title-log-markers-time').checked);
 
   if (selectedNames.length === 0) {
     console.warn('❌ No projects selected');
     logEffectTitle('❌ Please select at least one project');
-    return;
-  }
-
-  if (!effectTitleAddEffectCheckbox.checked && !effectTitleAddTitleCheckbox.checked) {
-    console.warn('❌ No options selected');
-    logEffectTitle('❌ Please enable at least one option (Auto Add Effect or Auto Add Title)');
     return;
   }
 
@@ -712,15 +707,17 @@ effectTitleProcessBtn.addEventListener('click', async () => {
   const projectPaths = selectedNames.map(name => allEffectTitleProjects[name]);
   const addEffect = effectTitleAddEffectCheckbox.checked;
   const addTitle = effectTitleAddTitleCheckbox.checked;
+  const logMarkersTime = document.getElementById('effect-title-log-markers-time').checked;
   const titleText = addTitle ? effectTitleTextInput.value : '';
 
   console.log('📤 Calling window.electronAPI.processEffectTitle()');
   console.log('   Add Effect:', addEffect);
   console.log('   Add Title:', addTitle);
+  console.log('   Log Markers Time:', logMarkersTime);
   console.log('   Project paths:', projectPaths);
 
   try {
-    const result = await window.electronAPI.processEffectTitle(projectPaths, addEffect, addTitle, titleText);
+    const result = await window.electronAPI.processEffectTitle(projectPaths, addEffect, addTitle, titleText, logMarkersTime);
     console.log('✅ processEffectTitle IPC returned:', result);
 
     if (result.success) {

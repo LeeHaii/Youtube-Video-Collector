@@ -112,6 +112,7 @@ async function verifyWithServer(key) {
 
 // Store download process and error tracking
 let downloadProcess = null;
+let downloadStopFlagPath = null;  // Path to stop flag file for graceful shutdown
 let rateLimitErrors = [];  // Track rate limit errors: {url, timestamps}
 let ageRestrictionErrors = [];  // Track age restriction errors: {url, timestamps}
 let currentInputCsvPath = '';  // Store input CSV path for error extraction
@@ -661,8 +662,12 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
     console.log(`⏱️  Clip Sleep: ${clipSleepMin}-${clipSleepMax}s`);
     console.log(`⏱️  Row Sleep: ${rowSleepMin}-${rowSleepMax}s`);
 
+    // Create a unique stop flag file path for graceful shutdown
+    downloadStopFlagPath = path.join(os.tmpdir(), `downloader-stop-flag-${Date.now()}.txt`);
+    console.log(`⚠️  Stop flag path: ${downloadStopFlagPath}`);
+
     // Spawn executable process WITHOUT shell to properly handle spaces in paths
-    downloadProcess = spawn(exePath, [csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax], {
+    downloadProcess = spawn(exePath, [csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, downloadStopFlagPath], {
       stdio: 'pipe',
       shell: false,
     });
@@ -721,6 +726,17 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
         ageRestrictionCount: ageRestrictionErrors.length,
       });
       downloadProcess = null;
+      
+      // Clean up stop flag file
+      if (downloadStopFlagPath && fs.existsSync(downloadStopFlagPath)) {
+        try {
+          fs.unlinkSync(downloadStopFlagPath);
+          console.log('🗑️  Stop flag file cleaned up');
+        } catch (err) {
+          console.warn('⚠️  Failed to delete stop flag file:', err.message);
+        }
+      }
+      downloadStopFlagPath = null;
     });
 
     return { success: true };
@@ -732,10 +748,25 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
 
 // 5-Sec Downloader - Stop Download
 ipcMain.handle('stop-download', async (event) => {
-  if (downloadProcess) {
-    downloadProcess.kill();
-    downloadProcess = null;
-    return { success: true };
+  if (downloadProcess && downloadStopFlagPath) {
+    // Create the stop flag file to signal graceful shutdown
+    try {
+      fs.writeFileSync(downloadStopFlagPath, 'STOP', 'utf8');
+      console.log('⏹️  Stop flag created, waiting for process to exit gracefully...');
+      // Give the process 5 seconds to exit gracefully
+      setTimeout(() => {
+        if (downloadProcess) {
+          console.log('⚠️  Process did not exit gracefully, killing it...');
+          downloadProcess.kill();
+        }
+      }, 5000);
+      return { success: true };
+    } catch (err) {
+      console.error('Error creating stop flag:', err.message);
+      // Fallback to killing the process
+      downloadProcess.kill();
+      return { success: true };
+    }
   }
   return { success: false, error: 'No download in progress' };
 });
@@ -976,7 +1007,7 @@ ipcMain.handle('open-url', async (event, url) => {
 });
 
 // Auto Add Effect & Title - Process Projects
-ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, addTitle, titleText) => {
+ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, addTitle, titleText, logMarkersTime) => {
   try {
     // Get paths to the compiled executables
     const autoEffectExePath = getExecutablePath('auto_add_effect');
@@ -994,7 +1025,7 @@ ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, ad
     console.log(`📄 Auto Effect Executable: ${autoEffectExePath}`);
     console.log(`📄 Auto Title Executable: ${autoTitleExePath}`);
     console.log(`🎯 Projects to process: ${projectPaths.length}`);
-    console.log(`✨ Add Effect: ${addEffect}, Add Title: ${addTitle}`);
+    console.log(`✨ Add Effect: ${addEffect}, Add Title: ${addTitle}, Log Markers Time: ${logMarkersTime}`);
 
     // Extract text lines from titleText if adding title
     let extractedTexts = [];
@@ -1086,8 +1117,14 @@ ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, ad
           // Pass the project path and extracted texts as command-line arguments
           await new Promise((resolve, reject) => {
             const textsJson = JSON.stringify(extractedTexts);
+            const args = [projectPath, textsJson];
             
-            const process = spawn(autoTitleExePath, [projectPath, textsJson], {
+            // Add log-markers-time flag if enabled
+            if (logMarkersTime) {
+              args.push('--log-markers-time');
+            }
+            
+            const process = spawn(autoTitleExePath, args, {
               stdio: 'pipe',
               shell: false,
             });

@@ -477,6 +477,9 @@ function loadRowToPanel(rowIndex, urlIndex) {
   loadedRowIndex = rowIndex;
   loadedUrlIndex = urlIndex;
 
+  // Disable the "Take URL + Markers" button to prevent mistakes while editing
+  takeUrlBtn.disabled = true;
+
   // Show the save button
   saveRowBtn.style.display = 'inline-block';
 
@@ -577,6 +580,9 @@ function saveRowChanges() {
   updateMarkersDisplay();
   updateCurrentRowDisplay();
   updateRowsTable();
+
+  // Re-enable the "Take URL + Markers" button
+  takeUrlBtn.disabled = false;
 
   // Hide the save button
   saveRowBtn.style.display = 'none';
@@ -834,6 +840,15 @@ function updateNavigationButtonStates() {
 
 // Back button
 ytBackBtn.addEventListener('click', () => {
+  if (markers.length > 0) {
+    const confirmed = confirm(`⚠️ You have ${markers.length} marker(s) selected.\n\nGoing back will lose these markers if you don't save first.\n\nContinue anyway?`);
+    if (!confirmed) {
+      return;
+    }
+    // Clear markers since user confirmed
+    markers = [];
+    updateMarkersDisplay();
+  }
   console.log('⬅️ Going back...');
   youtubeWebview.goBack();
   setTimeout(updateNavigationButtonStates, 300);
@@ -841,6 +856,15 @@ ytBackBtn.addEventListener('click', () => {
 
 // Forward button
 ytForwardBtn.addEventListener('click', () => {
+  if (markers.length > 0) {
+    const confirmed = confirm(`⚠️ You have ${markers.length} marker(s) selected.\n\nGoing forward will lose these markers if you don't save first.\n\nContinue anyway?`);
+    if (!confirmed) {
+      return;
+    }
+    // Clear markers since user confirmed
+    markers = [];
+    updateMarkersDisplay();
+  }
   console.log('➡️ Going forward...');
   youtubeWebview.goForward();
   setTimeout(updateNavigationButtonStates, 300);
@@ -848,6 +872,15 @@ ytForwardBtn.addEventListener('click', () => {
 
 // Refresh button
 ytRefreshBtn.addEventListener('click', () => {
+  if (markers.length > 0) {
+    const confirmed = confirm(`⚠️ You have ${markers.length} marker(s) selected.\n\nRefreshing the page will lose these markers if you don't save first.\n\nContinue anyway?`);
+    if (!confirmed) {
+      return;
+    }
+    // Clear markers since user confirmed
+    markers = [];
+    updateMarkersDisplay();
+  }
   console.log('🔄 Refreshing page...');
   youtubeWebview.reload();
 });
