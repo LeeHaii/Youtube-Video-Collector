@@ -9,6 +9,7 @@ let currentUrl = '';
 let lastMarkerTime = -1; // Prevent duplicate markers
 let loadedRowIndex = -1; // Track which row is currently loaded for editing
 let loadedUrlIndex = -1; // Track which URL in the row is being edited (-1 = entire row)
+let autosaveInterval = 1;
 
 // DOM Elements
 const youtubeWebview = document.querySelector('#youtube-webview');
@@ -803,7 +804,7 @@ async function loadRowData() {
   }
 }
 
-// Auto-save every 5 minutes
+// Autosave every n minutes
 setInterval(async () => {
   if (rows.length > 0 || currentRow.length > 0) {
     try {
@@ -813,7 +814,7 @@ setInterval(async () => {
       console.warn('⚠️ Auto-save failed:', err);
     }
   }
-}, 5 * 60 * 1000); // 5 minutes
+}, autosaveInterval * 60 * 1000); // autosaveInterval minutes
 
 // Periodic URL update
 setInterval(updateUrlDisplay, 3000);
