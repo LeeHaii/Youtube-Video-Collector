@@ -1112,11 +1112,11 @@ ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, ad
         }
 
         // Process Auto Add Title
-        if (addTitle && extractedTexts.length > 0) {
-          console.log(`  📝 Running Auto Add Title with ${extractedTexts.length} text line(s)...`);
+        if ((addTitle && extractedTexts.length > 0) || logMarkersTime) {
+          console.log(`  📝 Running Auto Add Title${addTitle && extractedTexts.length > 0 ? ` with ${extractedTexts.length} text line(s)` : ` (log markers only)`}...`);
           // Pass the project path and extracted texts as command-line arguments
           await new Promise((resolve, reject) => {
-            const textsJson = JSON.stringify(extractedTexts);
+            const textsJson = JSON.stringify(extractedTexts.length > 0 ? extractedTexts : []);
             const args = [projectPath, textsJson];
             
             // Add log-markers-time flag if enabled

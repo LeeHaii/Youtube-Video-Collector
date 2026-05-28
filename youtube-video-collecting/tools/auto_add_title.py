@@ -114,10 +114,14 @@ def update_all_capcut_drafts(project_folder_path, text_vars, split_mode="balance
 
         # Log timing for even indices (if enabled)
         if log_markers_time:
-            print("  -> Timeline Log (Even Indices):")
-            for i in range(0, len(markers), 2):
-                t = markers[i]['time_range']['start']
-                print(f"     Index {i} | {markers[i]['title']} starts at {format_time(t)}")
+            print(f"  -> Timeline Log: Found {len(markers)} total markers")
+            if len(markers) == 0:
+                print("     ⚠️  No markers found in this project!")
+            else:
+                print("  -> Timeline Log (Even Indices):")
+                for i in range(0, len(markers), 2):
+                    t = markers[i]['time_range']['start']
+                    print(f"     Index {i} | {markers[i]['title']} starts at {format_time(t)}")
 
         # Detect Template (Text track with exactly 1 segment)
         template_track = next((t for t in data['tracks'] if t['type'] == 'text' and len(t['segments']) == 1), None)
