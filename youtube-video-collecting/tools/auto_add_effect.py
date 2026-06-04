@@ -4,7 +4,7 @@ import uuid
 import copy
 import sys
 
-def update_capcut_effects_all_files(project_folder_path):
+def update_capcut_effects_all_files(project_folder_path, skip_intro=False):
     # 1. Gather EVERY draft file in the directory hierarchy
     draft_files = []
     for root, dirs, files in os.walk(project_folder_path):
@@ -17,7 +17,8 @@ def update_capcut_effects_all_files(project_folder_path):
         print(f"[-] No 'draft_content.json' files discovered inside: {project_folder_path}")
         return
 
-    print(f"[+] Found {len(draft_files)} draft file(s) total. Commencing batch modification...\n")
+    print(f"[+] Found {len(draft_files)} draft file(s) total. Commencing batch modification...")
+    print(f"[+] Skip Intro: {skip_intro}\n")
 
     # 2. Process each file one by one
     for idx, file_path in enumerate(draft_files, start=1):
@@ -78,8 +79,15 @@ def update_capcut_effects_all_files(project_folder_path):
         new_track['id'] = str(uuid.uuid4()).upper()
         new_track['segments'] = []
 
-        # Target alternating pairs (2-3, 4-5...) -> indices (1,2), (3,4)...
-        pair_indices = [(i, i + 1) for i in range(1, len(markers) - 1, 2)]
+        # Target alternating pairs
+        # If skip_intro is False: pairs (1,2), (3,4), (5,6)... starting from marker index 1
+        # If skip_intro is True: pairs (0,1), (2,3), (4,5)... starting from marker index 0
+        start_idx = 0 if skip_intro else 1
+        pair_indices = [(i, i + 1) for i in range(start_idx, len(markers) - 1, 2)]
+
+        if not pair_indices:
+            print("    -> Skipped (Not enough markers to form alternating pairs)\n")
+            continue
 
         segments_created = 0
         for i, (idx_start, idx_end) in enumerate(pair_indices):
@@ -130,11 +138,14 @@ DEFAULT_PROJECT_FOLDER = r""
 
 if __name__ == '__main__':
     if len(sys.argv) >= 2:
-        # Called from Electron: python auto_add_effect.py <project_folder>
+        # Called from Electron: python auto_add_effect.py <project_folder> [--skip-intro]
         PROJECT_FOLDER = sys.argv[1]
+        skip_intro = '--skip-intro' in sys.argv
     else:
         # Default: use hardcoded value
         PROJECT_FOLDER = DEFAULT_PROJECT_FOLDER
+        skip_intro = False
     
     print(f"Using folder: {PROJECT_FOLDER}")
-    update_capcut_effects_all_files(PROJECT_FOLDER)
+    print(f"Skip Intro: {skip_intro}")
+    update_capcut_effects_all_files(PROJECT_FOLDER, skip_intro=skip_intro)

@@ -1007,7 +1007,7 @@ ipcMain.handle('open-url', async (event, url) => {
 });
 
 // Auto Add Effect & Title - Process Projects
-ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, addTitle, titleText, logMarkersTime) => {
+ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, addTitle, titleText, logMarkersTime, skipIntro) => {
   try {
     // Get paths to the compiled executables
     const autoEffectExePath = getExecutablePath('auto_add_effect');
@@ -1025,7 +1025,7 @@ ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, ad
     console.log(`📄 Auto Effect Executable: ${autoEffectExePath}`);
     console.log(`📄 Auto Title Executable: ${autoTitleExePath}`);
     console.log(`🎯 Projects to process: ${projectPaths.length}`);
-    console.log(`✨ Add Effect: ${addEffect}, Add Title: ${addTitle}, Log Markers Time: ${logMarkersTime}`);
+    console.log(`✨ Add Effect: ${addEffect}, Add Title: ${addTitle}, Log Markers Time: ${logMarkersTime}, Skip Intro: ${skipIntro}`);
 
     // Extract text lines from titleText if adding title
     let extractedTexts = [];
@@ -1073,7 +1073,12 @@ ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, ad
         if (addEffect) {
           console.log(`  ✨ Running Auto Add Effect...`);
           await new Promise((resolve, reject) => {
-            const process = spawn(autoEffectExePath, [projectPath], {
+            const effectArgs = [projectPath];
+            if (skipIntro) {
+              effectArgs.push('--skip-intro');
+            }
+            
+            const process = spawn(autoEffectExePath, effectArgs, {
               stdio: 'pipe',
               shell: false,
             });
@@ -1122,6 +1127,11 @@ ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, ad
             // Add log-markers-time flag if enabled
             if (logMarkersTime) {
               args.push('--log-markers-time');
+            }
+            
+            // Add skip-intro flag if enabled
+            if (skipIntro) {
+              args.push('--skip-intro');
             }
             
             const process = spawn(autoTitleExePath, args, {

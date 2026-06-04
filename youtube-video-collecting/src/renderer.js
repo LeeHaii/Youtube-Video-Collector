@@ -10,6 +10,8 @@ let lastMarkerTime = -1; // Prevent duplicate markers
 let loadedRowIndex = -1; // Track which row is currently loaded for editing
 let loadedUrlIndex = -1; // Track which URL in the row is being edited (-1 = entire row)
 let autosaveInterval = 1;
+let offsetMarkingEnabled = false; // Toggle for offset marking method (5 seconds before)
+let autosaveIntervalId = null; // Store the interval ID for dynamic updates
 
 // DOM Elements
 const youtubeWebview = document.querySelector('#youtube-webview');
@@ -28,6 +30,14 @@ const rowsGrid = document.querySelector('#rows-grid tbody');
 const loadRowBtn = document.querySelector('#load-row-btn');
 const saveRowBtn = document.querySelector('#save-row-btn');
 
+// Settings Modal Elements
+const settingsModal = document.querySelector('#settings-modal');
+const settingsCloseBtn = document.querySelector('#settings-close-btn');
+const settingsSaveBtn = document.querySelector('#settings-save-btn');
+const settingsCancelBtn = document.querySelector('#settings-cancel-btn');
+const autosaveIntervalInput = document.querySelector('#autosave-interval-input');
+const markingMethodToggle = document.querySelector('#marking-method-toggle');
+
 console.log('✅ DOM elements loaded');
 
 // Event Listeners
@@ -39,10 +49,39 @@ clearRowBtn.addEventListener('click', clearCurrentRow);
 loadRowBtn.addEventListener('click', loadRowData);
 saveRowBtn.addEventListener('click', saveRowChanges);
 
+// Settings Button
+const settingsBtn = document.querySelector('#settings-btn');
+if (settingsBtn) {
+  settingsBtn.addEventListener('click', openSettings);
+}
+
 console.log('✅ Button listeners attached');
 
-// Global keyboard listener for marker detection
-let isYoutubeActive = false;
+// Settings Modal Event Listeners
+settingsCloseBtn.addEventListener('click', closeSettings);
+settingsSaveBtn.addEventListener('click', saveSettings);
+settingsCancelBtn.addEventListener('click', closeSettings);
+
+// Credit Facebook Link
+const creditFacebookLink = document.querySelector('#credit-facebook-link');
+if (creditFacebookLink) {
+  creditFacebookLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    window.electronAPI.openUrl('https://www.facebook.com/rhymx2k3/');
+  });
+}
+
+// Close settings modal when clicking outside of it
+settingsModal.addEventListener('click', (e) => {
+  if (e.target === settingsModal) {
+    closeSettings();
+  }
+});
+
+// Load settings on page load
+loadSettings();
+
+console.log('✅ Settings listeners attached');
 
 youtubeWebview.addEventListener('focus', () => {
   console.log('🎯 WebView focused');
@@ -194,9 +233,16 @@ function processMarker(videoData) {
     return;
   }
   
+  // Apply offset if enabled (5 seconds before)
+  let markerTime = videoData.time;
+  if (offsetMarkingEnabled) {
+    markerTime = Math.max(0, videoData.time - 5); // Ensure time doesn't go below 0
+    console.log(`📍 Offset marking enabled: ${videoData.time}s -> ${markerTime}s (5s offset)`);
+  }
+  
   const marker = {
-    time: videoData.time,
-    formatted: formatMarkerTime(videoData.time),
+    time: markerTime,
+    formatted: formatMarkerTime(markerTime),
   };
   
   console.log('✅ Adding marker:', marker);
@@ -804,17 +850,104 @@ async function loadRowData() {
   }
 }
 
-// Autosave every n minutes
-setInterval(async () => {
-  if (rows.length > 0 || currentRow.length > 0) {
-    try {
-      await window.electronAPI.saveRowAutosave(rows, currentRow);
-      console.log('💾 Auto-saved data');
-    } catch (err) {
-      console.warn('⚠️ Auto-save failed:', err);
-    }
+// ============================================================================
+// SETTINGS FUNCTIONS
+// ============================================================================
+
+/**
+ * Open the settings modal and load current settings
+ */
+function openSettings() {
+  console.log('⚙️ Opening settings modal');
+  autosaveIntervalInput.value = autosaveInterval;
+  markingMethodToggle.checked = offsetMarkingEnabled;
+  settingsModal.classList.add('active');
+}
+
+/**
+ * Close the settings modal
+ */
+function closeSettings() {
+  console.log('⚙️ Closing settings modal');
+  settingsModal.classList.remove('active');
+}
+
+/**
+ * Save settings and update the app
+ */
+function saveSettings() {
+  const newInterval = parseInt(autosaveIntervalInput.value, 10);
+  const newOffsetEnabled = markingMethodToggle.checked;
+
+  if (isNaN(newInterval) || newInterval < 1 || newInterval > 60) {
+    alert('❌ Please enter a valid autosave interval between 1 and 60 minutes');
+    return;
   }
-}, autosaveInterval * 60 * 1000); // autosaveInterval minutes
+
+  // Update global settings
+  autosaveInterval = newInterval;
+  offsetMarkingEnabled = newOffsetEnabled;
+
+  // Save to localStorage
+  localStorage.setItem('autosaveInterval', String(autosaveInterval));
+  localStorage.setItem('offsetMarkingEnabled', String(offsetMarkingEnabled));
+
+  console.log('✅ Settings saved:');
+  console.log(`   Autosave interval: ${autosaveInterval} minutes`);
+  console.log(`   Offset marking: ${offsetMarkingEnabled ? 'Enabled (5s offset)' : 'Disabled (exact timestamp)'}`);
+
+  // Restart autosave interval with new value
+  if (autosaveIntervalId) {
+    clearInterval(autosaveIntervalId);
+    console.log('⏹️ Old autosave interval cleared');
+  }
+  startAutosaveInterval();
+
+  // Show confirmation
+  showNotification(`⚙️ Settings saved! Autosave: ${autosaveInterval}m | Offset marking: ${offsetMarkingEnabled ? 'ON' : 'OFF'}`);
+  
+  closeSettings();
+}
+
+/**
+ * Load settings from localStorage
+ */
+function loadSettings() {
+  const savedInterval = localStorage.getItem('autosaveInterval');
+  const savedOffsetEnabled = localStorage.getItem('offsetMarkingEnabled');
+
+  if (savedInterval) {
+    autosaveInterval = parseInt(savedInterval, 10);
+  }
+  if (savedOffsetEnabled !== null) {
+    offsetMarkingEnabled = savedOffsetEnabled === 'true';
+  }
+
+  console.log('⚙️ Settings loaded:');
+  console.log(`   Autosave interval: ${autosaveInterval} minutes`);
+  console.log(`   Offset marking: ${offsetMarkingEnabled ? 'Enabled' : 'Disabled'}`);
+}
+
+/**
+ * Start the autosave interval
+ */
+function startAutosaveInterval() {
+  autosaveIntervalId = setInterval(async () => {
+    if (rows.length > 0 || currentRow.length > 0) {
+      try {
+        await window.electronAPI.saveRowAutosave(rows, currentRow);
+        console.log('💾 Auto-saved data');
+      } catch (err) {
+        console.warn('⚠️ Auto-save failed:', err);
+      }
+    }
+  }, autosaveInterval * 60 * 1000); // autosaveInterval minutes
+  
+  console.log(`✅ Autosave interval started: ${autosaveInterval} minute(s)`);
+}
+
+// Autosave every n minutes
+startAutosaveInterval();
 
 // Periodic URL update
 setInterval(updateUrlDisplay, 3000);

@@ -77,7 +77,7 @@ def extract_text_by_keywords(text_input, keywords):
     return extracted_lines
 
 
-def update_all_capcut_drafts(project_folder_path, text_vars, split_mode="balanced", log_markers_time=True):
+def update_all_capcut_drafts(project_folder_path, text_vars, split_mode="balanced", log_markers_time=True, skip_intro=False):
     # 1. Recursively find all files named 'draft_content.json'
     draft_files = []
     for root, dirs, files in os.walk(project_folder_path):
@@ -89,7 +89,8 @@ def update_all_capcut_drafts(project_folder_path, text_vars, split_mode="balance
         print(f"Error: No 'draft_content.json' files found inside: {project_folder_path}")
         return
 
-    print(f"Found {len(draft_files)} draft file(s) to process using '{split_mode}' splitting.\n")
+    print(f"Found {len(draft_files)} draft file(s) to process using '{split_mode}' splitting.")
+    print(f"Skip Intro: {skip_intro}\n")
 
     # 2. Iterate and update each file in-place
     for file_path in draft_files:
@@ -141,11 +142,22 @@ def update_all_capcut_drafts(project_folder_path, text_vars, split_mode="balance
         new_track['segments'] = []
 
         # Build segments from marker pairs
-        num_pairs = len(markers) // 2
+        # If skip_intro is True, use pairs 2-3, 4-5, 6-7... (indices 1-2, 3-4, 5-6...)
+        # If skip_intro is False, use pairs 1-2, 3-4, 5-6... (indices 0-1, 2-3, 4-4...)
+        offset = 1 if skip_intro else 0
+        max_pairs = (len(markers) - offset) // 2 if skip_intro else len(markers) // 2
         segments_created = 0
-        for i in range(min(len(text_vars), num_pairs)):
-            start = markers[i*2]['time_range']['start']
-            end = markers[i*2 + 1]['time_range']['start']
+        
+        for i in range(min(len(text_vars), max_pairs)):
+            start_idx = i * 2 + offset
+            end_idx = start_idx + 1
+            
+            # Safety check for array bounds
+            if end_idx >= len(markers):
+                break
+            
+            start = markers[start_idx]['time_range']['start']
+            end = markers[end_idx]['time_range']['start']
             
             # Segment configuration
             new_seg = copy.deepcopy(template_segment)
@@ -198,7 +210,7 @@ DEFAULT_TEXTS = [
 # Check if arguments are provided (called from UI)
 if __name__ == '__main__':
     if len(sys.argv) >= 3:
-        # Called from Electron: python auto_add_title.py <project_folder> <texts_json> [--log-markers-time]
+        # Called from Electron: python auto_add_title.py <project_folder> <texts_json> [--log-markers-time] [--skip-intro]
         PROJECT_FOLDER = sys.argv[1]
         try:
             my_texts = json.loads(sys.argv[2])
@@ -208,21 +220,25 @@ if __name__ == '__main__':
             print(f"Error: Invalid texts JSON format: {sys.argv[2]}")
             my_texts = DEFAULT_TEXTS
         
-        # Check for log-markers-time flag
+        # Check for flags
         log_markers_time = '--log-markers-time' in sys.argv
+        skip_intro = '--skip-intro' in sys.argv
     elif len(sys.argv) >= 2:
         # Called with just project folder
         PROJECT_FOLDER = sys.argv[1]
         my_texts = DEFAULT_TEXTS
         log_markers_time = '--log-markers-time' in sys.argv
+        skip_intro = '--skip-intro' in sys.argv
     else:
         # Default: use hardcoded values
         my_texts = DEFAULT_TEXTS
         log_markers_time = True
+        skip_intro = False
 
     print(f"Using folder: {PROJECT_FOLDER}")
     print(f"Using {len(my_texts)} text(s)")
     print(f"Log Markers Time: {log_markers_time}")
+    print(f"Skip Intro: {skip_intro}")
     
     # You can choose either "balanced" or "strict" here depending on your design preference
-    update_all_capcut_drafts(PROJECT_FOLDER, my_texts, split_mode="balanced", log_markers_time=log_markers_time)
+    update_all_capcut_drafts(PROJECT_FOLDER, my_texts, split_mode="balanced", log_markers_time=log_markers_time, skip_intro=skip_intro)

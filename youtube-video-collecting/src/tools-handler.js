@@ -688,6 +688,11 @@ effectTitleProcessBtn.addEventListener('click', async () => {
   console.log('   Add Effect:', effectTitleAddEffectCheckbox.checked);
   console.log('   Add Title:', effectTitleAddTitleCheckbox.checked);
   console.log('   Log Markers Time:', document.getElementById('effect-title-log-markers-time').checked);
+  
+  // Safe null-check for skip intro checkbox
+  const skipIntroCheckbox = document.getElementById('effect-title-skip-intro');
+  console.log('   Skip Intro Checkbox Element:', skipIntroCheckbox);
+  console.log('   Skip Intro Checkbox Checked:', skipIntroCheckbox?.checked);
 
   if (selectedNames.length === 0) {
     console.warn('❌ No projects selected');
@@ -708,16 +713,20 @@ effectTitleProcessBtn.addEventListener('click', async () => {
   const addEffect = effectTitleAddEffectCheckbox.checked;
   const addTitle = effectTitleAddTitleCheckbox.checked;
   const logMarkersTime = document.getElementById('effect-title-log-markers-time').checked;
+  const skipIntro = skipIntroCheckbox?.checked || false;
   const titleText = addTitle ? effectTitleTextInput.value : '';
 
   console.log('📤 Calling window.electronAPI.processEffectTitle()');
   console.log('   Add Effect:', addEffect);
   console.log('   Add Title:', addTitle);
   console.log('   Log Markers Time:', logMarkersTime);
+  console.log('   Skip Intro (final value):', skipIntro);
   console.log('   Project paths:', projectPaths);
+  
+  logEffectTitle(`📝 Skip Intro enabled: ${skipIntro}`);
 
   try {
-    const result = await window.electronAPI.processEffectTitle(projectPaths, addEffect, addTitle, titleText, logMarkersTime);
+    const result = await window.electronAPI.processEffectTitle(projectPaths, addEffect, addTitle, titleText, logMarkersTime, skipIntro);
     console.log('✅ processEffectTitle IPC returned:', result);
 
     if (result.success) {

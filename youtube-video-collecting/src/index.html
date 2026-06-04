@@ -1,523 +1,607 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <title>Rhymx's Youtube Ultimate Tool</title>
-    <link rel="stylesheet" href="index.css" />
-  </head>
-  <body>
-    <div class="app-container">
-      <!-- Tab Navigation -->
-      <div class="tab-navigation">
-        <button class="tab-btn active" data-tab="youtube-tab">YouTube Collector</button>
-        <button class="tab-btn" data-tab="downloader-tab">5-Sec Downloader</button>
-        <button class="tab-btn" data-tab="trimmer-tab">YouTube Trimmer</button>
-        <button class="tab-btn" data-tab="capcut-tab">CapCut Shuffle</button>
-        <button class="tab-btn" data-tab="capcut-effect-title-tab">Auto Add Effect & Title</button>
-        <button class="tab-btn" data-tab="capcut-render-tab">CapCut Auto Render</button>
-      </div>
 
-      <!-- Tab 1: YouTube Video Collector -->
-      <div id="youtube-tab" class="tab-content active">
-        <div class="app-container">
-          <!-- Top section: YouTube + Controls -->
-          <div class="top-section">
-            <!-- Left side: YouTube WebView -->
-            <div class="youtube-section">
-              <!-- Navigation Toolbar -->
-              <div class="youtube-toolbar">
-                <button id="yt-back-btn" class="yt-nav-btn" title="Go back">←</button>
-                <button id="yt-forward-btn" class="yt-nav-btn" title="Go forward">→</button>
-                <button id="yt-refresh-btn" class="yt-nav-btn" title="Refresh page">⟳</button>
-                <input type="text" id="yt-url-field" class="yt-url-input" readonly placeholder="Loading..." />
-              </div>
-              <!-- YouTube WebView -->
-              <webview id="youtube-webview" src="https://www.youtube.com" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation"></webview>
+<head>
+  <meta charset="UTF-8" />
+  <title>Rhymx's Youtube Ultimate Tool</title>
+  <link rel="stylesheet" href="index.css" />
+</head>
+
+<body>
+  <div class="app-container">
+    <!-- Tab Navigation -->
+    <div class="tab-navigation">
+      <button class="tab-btn active" data-tab="youtube-tab">YouTube Collector</button>
+      <button class="tab-btn" data-tab="downloader-tab">5-Sec Downloader</button>
+      <button class="tab-btn" data-tab="trimmer-tab">YouTube Trimmer</button>
+      <button class="tab-btn" data-tab="capcut-tab">CapCut Shuffle</button>
+      <button class="tab-btn" data-tab="capcut-effect-title-tab">Auto Add Effect & Title</button>
+      <button class="tab-btn" data-tab="capcut-render-tab">CapCut Auto Render</button>
+    </div>
+
+    <!-- Tab 1: YouTube Video Collector -->
+    <div id="youtube-tab" class="tab-content active">
+      <div class="app-container">
+        <!-- Top section: YouTube + Controls -->
+        <div class="top-section">
+          <!-- Left side: YouTube WebView -->
+          <div class="youtube-section">
+            <!-- Navigation Toolbar -->
+            <div class="youtube-toolbar">
+              <button id="yt-back-btn" class="yt-nav-btn" title="Go back">←</button>
+              <button id="yt-forward-btn" class="yt-nav-btn" title="Go forward">→</button>
+              <button id="yt-refresh-btn" class="yt-nav-btn" title="Refresh page">⟳</button>
+              <input type="text" id="yt-url-field" class="yt-url-input" readonly placeholder="Loading..." />
             </div>
+            <!-- YouTube WebView -->
+            <webview id="youtube-webview" src="https://www.youtube.com"
+              sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation">
+            </webview>
+          </div>
 
-            <!-- Right side: Controls and current row -->
-            <div class="right-panel">
-              <div class="control-panel">
-                <div class="panel-header">
-                  <h2>Video Collector</h2>
+          <!-- Right side: Controls and current row -->
+          <div class="right-panel">
+            <div class="control-panel">
+              <div class="panel-header">
+                <h2>Video Collector</h2>
+              </div>
+
+              <!-- Current URL Display -->
+              <div class="url-display">
+                <label>Current URL:</label>
+                <input type="text" id="current-url" readonly />
+              </div>
+
+              <!-- Marker List (Scrollable) -->
+              <div class="markers-section">
+                <div class="section-header">
+                  <h3>Markers (Press , to add)</h3>
+                  <button id="undo-btn" class="small-btn" title="Undo last marker">↶</button>
                 </div>
+                <div id="markers-list" class="markers-list"></div>
+              </div>
 
-                <!-- Current URL Display -->
-                <div class="url-display">
-                  <label>Current URL:</label>
-                  <input type="text" id="current-url" readonly />
-                </div>
+              <!-- Button Group -->
+              <div class="button-group">
+                <button id="take-url-btn" class="action-btn">Take URL + Markers</button>
+                <button id="next-row-btn" class="action-btn">Next Row</button>
+                <button id="export-btn" class="action-btn primary">Export CSV</button>
+                <button id="save-row-btn" class="action-btn primary"
+                  style="display: none; background-color: #48bb78;">Save Changes</button>
+              </div>
 
-                <!-- Marker List (Scrollable) -->
-                <div class="markers-section">
-                  <div class="section-header">
-                    <h3>Markers (Press , to add)</h3>
-                    <button id="undo-btn" class="small-btn" title="Undo last marker">↶</button>
+              <!-- Current Row Display -->
+              <div class="current-row-section">
+                <div class="current-row-header">
+                  <h3>Current Row:</h3>
+                  <div class="row-header-buttons">
+                    <button id="clear-row-btn" class="small-btn" title="Clear current row">🗑️</button>
                   </div>
-                  <div id="markers-list" class="markers-list"></div>
                 </div>
-
-                <!-- Button Group -->
-                <div class="button-group">
-                  <button id="take-url-btn" class="action-btn">Take URL + Markers</button>
-                  <button id="next-row-btn" class="action-btn">Next Row</button>
-                  <button id="export-btn" class="action-btn primary">Export CSV</button>
-                  <button id="save-row-btn" class="action-btn primary" style="display: none; background-color: #48bb78;">Save Changes</button>
-                </div>
-
-                <!-- Current Row Display -->
-                <div class="current-row-section">
-                  <div class="current-row-header">
-                    <h3>Current Row:</h3>
-                    <div class="row-header-buttons">
-                      <button id="clear-row-btn" class="small-btn" title="Clear current row">🗑️</button>
-                    </div>
-                  </div>
-                  <div id="current-row-display" class="row-display"></div>
-                  <div class="current-row-stats">
-                    <span>Total Timestamps: <strong id="current-row-timestamp-count">0</strong></span>
-                  </div>
-                </div>
-
-                <!-- Status -->
-                <div class="status-section">
-                  <p>Total Rows: <span id="row-count">0</span> | Markers: <span id="marker-count">0</span></p>
+                <div id="current-row-display" class="row-display"></div>
+                <div class="current-row-stats">
+                  <span>Total Timestamps: <strong id="current-row-timestamp-count">0</strong></span>
                 </div>
               </div>
-            </div>
-          </div>
 
-          <!-- Bottom section: Rows Grid Table (Full Width, Scrollable) -->
-          <div class="rows-grid-section">
-            <div class="rows-grid-header">
-              <h3>Collected Rows:</h3>
-              <div class="row-header-buttons">
-                      <button id="load-row-btn" class="small-btn" title="Load .rhymx or CSV file">📂 Load</button>
-                    </div>
-            </div>
-            <div id="rows-grid-container" class="rows-grid-container">
-              <table id="rows-grid" class="rows-grid">
-                <thead>
-                  <tr>
-                    <th>Row</th>
-                    <th>URL / Timestamps</th>
-                    <th style="text-align: center; width: 80px;">TS Count</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
+              <!-- Status -->
+              <div class="status-section">
+                <p>Total Rows: <span id="row-count">0</span> | Markers: <span id="marker-count">0</span></p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Tab 2: 5-Sec Downloader -->
-      <div id="downloader-tab" class="tab-content">
-        <div class="tool-container">
-          <h1>5-Sec Downloader</h1>
-          
-          <!-- CSV Selector -->
-          <div class="form-section">
-            <label class="form-label">Input CSV:</label>
-            <div class="file-input-group">
-              <input type="text" id="csv-path" class="file-input" readonly placeholder="No file selected" />
-              <button id="csv-browse-btn" class="btn-secondary">Browse</button>
+        <!-- Bottom section: Rows Grid Table (Full Width, Scrollable) -->
+        <div class="rows-grid-section">
+          <div class="rows-grid-header">
+            <h3>Collected Rows:</h3>
+            <div class="row-header-buttons">
+              <button id="load-row-btn" class="small-btn" title="Load .rhymx or CSV file">📂 Load</button>
+              <button id="settings-btn" class="small-btn" title="Open settings">⚙️ Setting</button>
             </div>
           </div>
-
-          <!-- Output Folder Selector -->
-          <div class="form-section">
-            <label class="form-label">Output Folder:</label>
-            <div class="file-input-group">
-              <input type="text" id="output-path" class="file-input" readonly placeholder="No folder selected" />
-              <button id="output-browse-btn" class="btn-secondary">Browse</button>
-            </div>
-          </div>
-
-          <!-- Sleep Intervals Settings -->
-          <div class="form-section">
-            <label class="form-label">Sleep Intervals (to avoid rate limiting):</label>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-              <!-- Clip Sleep -->
-              <div>
-                <label style="font-size: 12px; color: #718096; display: block; margin-bottom: 4px;">Between Clips (seconds)</label>
-                <div style="display: flex; gap: 6px; align-items: center;">
-                  <input type="number" id="clip-sleep-min" class="form-input" value="1" min="0" step="0.5" style="flex: 1;" title="Minimum seconds between clips" />
-                  <span style="color: #718096; font-size: 12px;">to</span>
-                  <input type="number" id="clip-sleep-max" class="form-input" value="2" min="0" step="0.5" style="flex: 1;" title="Maximum seconds between clips" />
-                </div>
-              </div>
-              <!-- Row Sleep -->
-              <div>
-                <label style="font-size: 12px; color: #718096; display: block; margin-bottom: 4px;">Between Rows (seconds)</label>
-                <div style="display: flex; gap: 6px; align-items: center;">
-                  <input type="number" id="row-sleep-min" class="form-input" value="10" min="0" step="0.5" style="flex: 1;" title="Minimum seconds between rows" />
-                  <span style="color: #718096; font-size: 12px;">to</span>
-                  <input type="number" id="row-sleep-max" class="form-input" value="15" min="0" step="0.5" style="flex: 1;" title="Maximum seconds between rows" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Control Buttons -->
-          <div class="form-section button-row">
-            <button id="downloader-start-btn" class="btn-primary">Start</button>
-            <button id="downloader-stop-btn" class="btn-danger" disabled>Stop</button>
-            <button id="open-output-btn" class="btn-secondary">Open Output</button>
-          </div>
-
-          <!-- Error Extraction Buttons (Hidden by Default) -->
-          <div class="form-section button-row" id="error-extraction-buttons" style="display: none; gap: 10px;">
-            <button id="extract-rate-limit-btn" class="btn-secondary" title="Extract rate limit errors to CSV for retry">Extract Rate Limit Errors</button>
-            <button id="extract-age-restriction-btn" class="btn-secondary" title="Extract age-restricted videos to CSV for retry" style="display: none;">Extract Age Restriction Errors</button>
-          </div>
-
-          <!-- Log Area -->
-          <div class="log-section">
-            <label class="form-label">Log:</label>
-            <div id="downloader-log" class="log-output"></div>
-          </div>
-
-          <!-- Footer -->
-          <div class="tool-footer">
-            <span>© 2026 TranDucThang's 5-Sec Downloader</span>
-            <a href="#" id="fb-link-downloader">Facebook</a>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tab 3: YouTube Trimmer -->
-      <div id="trimmer-tab" class="tab-content">
-        <div class="tool-container">
-          <h1>YouTube Trimmer</h1>
-
-          <!-- Output Folder Selector -->
-          <div class="form-section">
-            <label class="form-label">Output Folder:</label>
-            <div class="file-input-group">
-              <input type="text" id="trimmer-output-path" class="file-input" readonly placeholder="No folder selected" />
-              <button id="trimmer-output-browse-btn" class="btn-secondary">Browse</button>
-            </div>
-          </div>
-
-          <!-- YouTube URL Input -->
-          <div class="form-section">
-            <label class="form-label">YouTube URL:</label>
-            <div class="file-input-group">
-              <input type="text" id="trimmer-url-input" class="form-input" placeholder="Paste YouTube URL here..." />
-              <button id="trimmer-url-ok-btn" class="btn-secondary">OK</button>
-            </div>
-          </div>
-
-          <!-- Timestamps and Download - Horizontal Layout -->
-          <div class="trimmer-controls-row">
-            <!-- Start Timestamp -->
-            <div class="trimmer-timestamp-section">
-              <label class="form-label">Start Timestamp:</label>
-              <div class="timestamp-input-group">
-                <div class="timestamp-field">
-                  <label>HH</label>
-                  <input type="number" id="trimmer-start-hours" class="timestamp-input" min="0" max="23" value="0" />
-                </div>
-                <span class="timestamp-separator">:</span>
-                <div class="timestamp-field">
-                  <label>MM</label>
-                  <input type="number" id="trimmer-start-minutes" class="timestamp-input" min="0" max="59" value="0" />
-                </div>
-                <span class="timestamp-separator">:</span>
-                <div class="timestamp-field">
-                  <label>SS</label>
-                  <input type="number" id="trimmer-start-seconds" class="timestamp-input" min="0" max="59" value="0" />
-                </div>
-                <span class="timestamp-separator">.</span>
-                <div class="timestamp-field">
-                  <label>MS</label>
-                  <input type="number" id="trimmer-start-ms" class="timestamp-input" min="0" max="999" value="0" />
-                </div>
-              </div>
-            </div>
-
-            <!-- End Timestamp -->
-            <div class="trimmer-timestamp-section">
-              <label class="form-label">End Timestamp:</label>
-              <div class="timestamp-input-group">
-                <div class="timestamp-field">
-                  <label>HH</label>
-                  <input type="number" id="trimmer-end-hours" class="timestamp-input" min="0" max="23" value="0" />
-                </div>
-                <span class="timestamp-separator">:</span>
-                <div class="timestamp-field">
-                  <label>MM</label>
-                  <input type="number" id="trimmer-end-minutes" class="timestamp-input" min="0" max="59" value="0" />
-                </div>
-                <span class="timestamp-separator">:</span>
-                <div class="timestamp-field">
-                  <label>SS</label>
-                  <input type="number" id="trimmer-end-seconds" class="timestamp-input" min="0" max="59" value="0" />
-                </div>
-                <span class="timestamp-separator">.</span>
-                <div class="timestamp-field">
-                  <label>MS</label>
-                  <input type="number" id="trimmer-end-ms" class="timestamp-input" min="0" max="999" value="0" />
-                </div>
-              </div>
-            </div>
-
-            <!-- Download Button -->
-            <div class="trimmer-download-section">
-              <label class="form-label">&nbsp;</label>
-              <button id="trimmer-download-btn" class="btn-primary" style="height: 44px;">Download Trimmed Video</button>
-            </div>
-          </div>
-
-          <!-- Video Preview WebView -->
-          <div class="form-section">
-            <label class="form-label">Video Player:</label>
-            <div class="trimmer-webview-container">
-              <webview id="trimmer-webview" src="about:blank" sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation"></webview>
-            </div>
-          </div>
-
-          <!-- Log Area -->
-          <div class="log-section">
-            <label class="form-label">Log:</label>
-            <div id="trimmer-log" class="log-output"></div>
-          </div>
-
-          <!-- Footer -->
-          <div class="tool-footer">
-            <span>© 2026 TranDucThang's YouTube Trimmer</span>
-            <a href="#" id="fb-link-trimmer">Facebook</a>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tab 4: CapCut Shuffle Track -->
-      <div id="capcut-tab" class="tab-content">
-        <div class="tool-container">
-          <h1>CapCut Project Shuffler</h1>
-
-          <!-- Folder Selection -->
-          <div class="form-section">
-            <label class="form-label" style="font-weight: bold;">CapCut Master Folder:</label>
-            <div class="file-input-group">
-              <input type="text" id="capcut-folder-path" class="file-input" readonly placeholder="No folder selected" />
-              <button id="capcut-browse-btn" class="btn-secondary">Browse</button>
-              <button id="capcut-refresh-btn" class="btn-secondary">Refresh</button>
-            </div>
-          </div>
-
-          <!-- Search Section -->
-          <div class="form-section">
-            <label class="form-label" style="font-weight: bold;">Search Projects:</label>
-            <input type="text" id="capcut-search-input" class="form-input" placeholder="Type to filter projects..." />
-          </div>
-
-          <!-- Projects List -->
-          <div class="form-section">
-            <label class="form-label" style="font-weight: bold;">Select Projects to Process:</label>
-            <div id="capcut-projects-list" class="projects-list"></div>
-          </div>
-
-          <!-- Cache Bust Option -->
-          <div class="form-section checkbox-section">
-            <label class="checkbox-label">
-              <input type="checkbox" id="capcut-cache-bust" checked />
-              Force CapCut cache refresh (rename folder & update metadata)
-            </label>
-          </div>
-
-          <!-- Process Button -->
-          <div class="form-section">
-            <button id="capcut-process-btn" class="btn-primary" style="width: 100%; padding: 15px; font-size: 16px;">
-              Process Selected Projects
-            </button>
-          </div>
-
-          <!-- Log Area -->
-          <div class="log-section">
-            <label class="form-label">Status:</label>
-            <div id="capcut-log" class="log-output"></div>
-          </div>
-
-          <!-- Footer -->
-          <div class="tool-footer">
-            <span>© 2026 TranDucThang's Clip Shuffler</span>
-            <a href="#" id="fb-link-capcut">Facebook</a>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tab 5: CapCut Auto Render -->
-      <div id="capcut-render-tab" class="tab-content">
-        <div class="tool-container">
-          <h1>CapCut Auto Render</h1>
-
-          <!-- Projects Path Selector -->
-          <div class="form-section">
-            <label class="form-label">Projects Folder:</label>
-            <div class="file-input-group">
-              <input type="text" id="render-projects-path" class="file-input" readonly placeholder="No folder selected" />
-              <button id="render-browse-btn" class="btn-secondary">Browse</button>
-            </div>
-          </div>
-
-          <!-- Projects List with Checkboxes -->
-          <div class="form-section">
-            <label class="form-label">Select Projects to Render:</label>
-            <div id="render-projects-list" class="projects-list"></div>
-          </div>
-
-          <!-- Delay Settings -->
-          <div class="form-section">
-            <label class="form-label">Step Delays (seconds):</label>
-            <div class="delays-grid">
-              <div class="delay-field">
-                <label>Click CapCut & search:</label>
-                <input type="number" id="delay-1-2" class="delay-input" min="0" value="1" />
-              </div>
-              <div class="delay-field">
-                <label>Search for project:</label>
-                <input type="number" id="delay-3" class="delay-input" min="0" value="2" />
-              </div>
-              <div class="delay-field">
-                <label>Click project:</label>
-                <input type="number" id="delay-4" class="delay-input" min="0" value="1" />
-              </div>
-              <div class="delay-field">
-                <label>Cancel link media:</label>
-                <input type="number" id="delay-5" class="delay-input" min="0" value="1" />
-              </div>
-              <div class="delay-field">
-                <label>Render (Ctrl+E):</label>
-                <input type="number" id="delay-6" class="delay-input" min="0" value="2" />
-              </div>
-              <div class="delay-field">
-                <label>Click export:</label>
-                <input type="number" id="delay-7" class="delay-input" min="0" value="1" />
-              </div>
-              <div class="delay-field">
-                <label>Wait for share & cancel:</label>
-                <input type="number" id="delay-8" class="delay-input" min="0" value="1200" />
-              </div>
-              <div class="delay-field">
-                <label>Menu & home:</label>
-                <input type="number" id="delay-9-10" class="delay-input" min="0" value="1" />
-              </div>
-              <div class="delay-field">
-                <label>Cancel search:</label>
-                <input type="number" id="delay-11" class="delay-input" min="0" value="1" />
-              </div>
-            </div>
-          </div>
-
-          <!-- Start Button -->
-          <div class="form-section">
-            <button id="render-start-btn" class="btn-primary" style="width: 100%; padding: 15px; font-size: 16px;">
-              Start Rendering Process
-            </button>
-          </div>
-
-          <!-- Log Area -->
-          <div class="log-section">
-            <label class="form-label">Log:</label>
-            <div id="render-log" class="log-output"></div>
-          </div>
-
-          <!-- Footer -->
-          <div class="tool-footer">
-            <span>© 2026 TranDucThang's CapCut Auto Render</span>
-            <a href="#" id="fb-link-render">Facebook</a>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tab 6: Auto Add Effect & Title -->
-      <div id="capcut-effect-title-tab" class="tab-content">
-        <div class="tool-container">
-          <h1>Auto Add Effect & Title</h1>
-
-          <!-- Folder Selection -->
-          <div class="form-section">
-            <label class="form-label" style="font-weight: bold;">CapCut Master Folder:</label>
-            <div class="file-input-group">
-              <input type="text" id="effect-title-folder-path" class="file-input" readonly placeholder="No folder selected" />
-              <button id="effect-title-browse-btn" class="btn-secondary">Browse</button>
-              <button id="effect-title-refresh-btn" class="btn-secondary">Refresh</button>
-            </div>
-          </div>
-
-          <!-- Search Section -->
-          <div class="form-section">
-            <label class="form-label" style="font-weight: bold;">Search Projects:</label>
-            <input type="text" id="effect-title-search-input" class="form-input" placeholder="Type to filter projects..." />
-          </div>
-
-          <!-- Projects List -->
-          <div class="form-section">
-            <label class="form-label" style="font-weight: bold;">Select Projects to Process:</label>
-            <div id="effect-title-projects-list" class="projects-list"></div>
-          </div>
-
-          <!-- Auto Add Effect Checkbox -->
-          <div class="form-section checkbox-section">
-            <label class="checkbox-label">
-              <input type="checkbox" id="effect-title-add-effect" />
-              Auto Add Effect
-            </label>
-          </div>
-
-          <!-- Auto Add Title Checkbox & Fields -->
-          <div class="form-section checkbox-section">
-            <label class="checkbox-label">
-              <input type="checkbox" id="effect-title-add-title" />
-              Auto Add Title
-            </label>
-          </div>
-
-          <!-- Log Markers Time Checkbox (Checked by Default) -->
-          <div class="form-section checkbox-section">
-            <label class="checkbox-label">
-              <input type="checkbox" id="effect-title-log-markers-time" checked />
-              Log Markers Time
-            </label>
-          </div>
-
-          <!-- Title Text Input (Hidden by Default) -->
-          <div class="form-section" id="effect-title-text-section" style="display: none;">
-            <label class="form-label" style="font-weight: bold;">Input Text:</label>
-            <textarea id="effect-title-text-input" class="form-input" placeholder="Paste your text here..." style="min-height: 120px; resize: vertical; font-family: monospace;"></textarea>
-          </div>
-
-          <!-- Extracted Text Display (Hidden by Default) -->
-          <div class="form-section" id="effect-title-extracted-section" style="display: none;">
-            <label class="form-label" style="font-weight: bold;">Extracted Text:</label>
-            <div id="effect-title-extracted-output" class="log-output" style="max-height: 200px; overflow-y: auto; color:black; background-color: #ffffff; border: 1px solid #cbd5e0; border-radius: 4px; padding: 10px; font-family: monospace; white-space: pre-wrap; word-wrap: break-word;"></div>
-          </div>
-
-          <!-- Process Button -->
-          <div class="form-section">
-            <button id="effect-title-process-btn" class="btn-primary" style="width: 100%; padding: 15px; font-size: 16px;">
-              Process Selected Projects
-            </button>
-          </div>
-
-          <!-- Log Area -->
-          <div class="log-section">
-            <label class="form-label">Status:</label>
-            <div id="effect-title-log" class="log-output"></div>
-          </div>
-
-          <!-- Footer -->
-          <div class="tool-footer">
-            <span>© 2026 TranDucThang's Auto Effect & Title</span>
-            <a href="#" id="fb-link-effect-title">Facebook</a>
+          <div id="rows-grid-container" class="rows-grid-container">
+            <table id="rows-grid" class="rows-grid">
+              <thead>
+                <tr>
+                  <th>Row</th>
+                  <th>URL / Timestamps</th>
+                  <th style="text-align: center; width: 80px;">TS Count</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
           </div>
         </div>
       </div>
     </div>
 
-    <script src="renderer.js"></script>
-    <script src="tools-handler.js"></script>
-  </body>
+    <!-- Tab 2: 5-Sec Downloader -->
+    <div id="downloader-tab" class="tab-content">
+      <div class="tool-container">
+        <h1>5-Sec Downloader</h1>
+
+        <!-- CSV Selector -->
+        <div class="form-section">
+          <label class="form-label">Input CSV:</label>
+          <div class="file-input-group">
+            <input type="text" id="csv-path" class="file-input" readonly placeholder="No file selected" />
+            <button id="csv-browse-btn" class="btn-secondary">Browse</button>
+          </div>
+        </div>
+
+        <!-- Output Folder Selector -->
+        <div class="form-section">
+          <label class="form-label">Output Folder:</label>
+          <div class="file-input-group">
+            <input type="text" id="output-path" class="file-input" readonly placeholder="No folder selected" />
+            <button id="output-browse-btn" class="btn-secondary">Browse</button>
+          </div>
+        </div>
+
+        <!-- Sleep Intervals Settings -->
+        <div class="form-section">
+          <label class="form-label">Sleep Intervals (to avoid rate limiting):</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <!-- Clip Sleep -->
+            <div>
+              <label style="font-size: 12px; color: #718096; display: block; margin-bottom: 4px;">Between Clips
+                (seconds)</label>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <input type="number" id="clip-sleep-min" class="form-input" value="1" min="0" step="0.5"
+                  style="flex: 1;" title="Minimum seconds between clips" />
+                <span style="color: #718096; font-size: 12px;">to</span>
+                <input type="number" id="clip-sleep-max" class="form-input" value="2" min="0" step="0.5"
+                  style="flex: 1;" title="Maximum seconds between clips" />
+              </div>
+            </div>
+            <!-- Row Sleep -->
+            <div>
+              <label style="font-size: 12px; color: #718096; display: block; margin-bottom: 4px;">Between Rows
+                (seconds)</label>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <input type="number" id="row-sleep-min" class="form-input" value="10" min="0" step="0.5"
+                  style="flex: 1;" title="Minimum seconds between rows" />
+                <span style="color: #718096; font-size: 12px;">to</span>
+                <input type="number" id="row-sleep-max" class="form-input" value="15" min="0" step="0.5"
+                  style="flex: 1;" title="Maximum seconds between rows" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Control Buttons -->
+        <div class="form-section button-row">
+          <button id="downloader-start-btn" class="btn-primary">Start</button>
+          <button id="downloader-stop-btn" class="btn-danger" disabled>Stop</button>
+          <button id="open-output-btn" class="btn-secondary">Open Output</button>
+        </div>
+
+        <!-- Error Extraction Buttons (Hidden by Default) -->
+        <div class="form-section button-row" id="error-extraction-buttons" style="display: none; gap: 10px;">
+          <button id="extract-rate-limit-btn" class="btn-secondary"
+            title="Extract rate limit errors to CSV for retry">Extract Rate Limit Errors</button>
+          <button id="extract-age-restriction-btn" class="btn-secondary"
+            title="Extract age-restricted videos to CSV for retry" style="display: none;">Extract Age Restriction
+            Errors</button>
+        </div>
+
+        <!-- Log Area -->
+        <div class="log-section">
+          <label class="form-label">Log:</label>
+          <div id="downloader-log" class="log-output"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="tool-footer">
+          <span>© 2026 TranDucThang's 5-Sec Downloader</span>
+          <a href="#" id="fb-link-downloader">Facebook</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 3: YouTube Trimmer -->
+    <div id="trimmer-tab" class="tab-content">
+      <div class="tool-container">
+        <h1>YouTube Trimmer</h1>
+
+        <!-- Output Folder Selector -->
+        <div class="form-section">
+          <label class="form-label">Output Folder:</label>
+          <div class="file-input-group">
+            <input type="text" id="trimmer-output-path" class="file-input" readonly placeholder="No folder selected" />
+            <button id="trimmer-output-browse-btn" class="btn-secondary">Browse</button>
+          </div>
+        </div>
+
+        <!-- YouTube URL Input -->
+        <div class="form-section">
+          <label class="form-label">YouTube URL:</label>
+          <div class="file-input-group">
+            <input type="text" id="trimmer-url-input" class="form-input" placeholder="Paste YouTube URL here..." />
+            <button id="trimmer-url-ok-btn" class="btn-secondary">OK</button>
+          </div>
+        </div>
+
+        <!-- Timestamps and Download - Horizontal Layout -->
+        <div class="trimmer-controls-row">
+          <!-- Start Timestamp -->
+          <div class="trimmer-timestamp-section">
+            <label class="form-label">Start Timestamp:</label>
+            <div class="timestamp-input-group">
+              <div class="timestamp-field">
+                <label>HH</label>
+                <input type="number" id="trimmer-start-hours" class="timestamp-input" min="0" max="23" value="0" />
+              </div>
+              <span class="timestamp-separator">:</span>
+              <div class="timestamp-field">
+                <label>MM</label>
+                <input type="number" id="trimmer-start-minutes" class="timestamp-input" min="0" max="59" value="0" />
+              </div>
+              <span class="timestamp-separator">:</span>
+              <div class="timestamp-field">
+                <label>SS</label>
+                <input type="number" id="trimmer-start-seconds" class="timestamp-input" min="0" max="59" value="0" />
+              </div>
+              <span class="timestamp-separator">.</span>
+              <div class="timestamp-field">
+                <label>MS</label>
+                <input type="number" id="trimmer-start-ms" class="timestamp-input" min="0" max="999" value="0" />
+              </div>
+            </div>
+          </div>
+
+          <!-- End Timestamp -->
+          <div class="trimmer-timestamp-section">
+            <label class="form-label">End Timestamp:</label>
+            <div class="timestamp-input-group">
+              <div class="timestamp-field">
+                <label>HH</label>
+                <input type="number" id="trimmer-end-hours" class="timestamp-input" min="0" max="23" value="0" />
+              </div>
+              <span class="timestamp-separator">:</span>
+              <div class="timestamp-field">
+                <label>MM</label>
+                <input type="number" id="trimmer-end-minutes" class="timestamp-input" min="0" max="59" value="0" />
+              </div>
+              <span class="timestamp-separator">:</span>
+              <div class="timestamp-field">
+                <label>SS</label>
+                <input type="number" id="trimmer-end-seconds" class="timestamp-input" min="0" max="59" value="0" />
+              </div>
+              <span class="timestamp-separator">.</span>
+              <div class="timestamp-field">
+                <label>MS</label>
+                <input type="number" id="trimmer-end-ms" class="timestamp-input" min="0" max="999" value="0" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Download Button -->
+          <div class="trimmer-download-section">
+            <label class="form-label">&nbsp;</label>
+            <button id="trimmer-download-btn" class="btn-primary" style="height: 44px;">Download Trimmed Video</button>
+          </div>
+        </div>
+
+        <!-- Video Preview WebView -->
+        <div class="form-section">
+          <label class="form-label">Video Player:</label>
+          <div class="trimmer-webview-container">
+            <webview id="trimmer-webview" src="about:blank"
+              sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation">
+            </webview>
+          </div>
+        </div>
+
+        <!-- Log Area -->
+        <div class="log-section">
+          <label class="form-label">Log:</label>
+          <div id="trimmer-log" class="log-output"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="tool-footer">
+          <span>© 2026 TranDucThang's YouTube Trimmer</span>
+          <a href="#" id="fb-link-trimmer">Facebook</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 4: CapCut Shuffle Track -->
+    <div id="capcut-tab" class="tab-content">
+      <div class="tool-container">
+        <h1>CapCut Project Shuffler</h1>
+
+        <!-- Folder Selection -->
+        <div class="form-section">
+          <label class="form-label" style="font-weight: bold;">CapCut Master Folder:</label>
+          <div class="file-input-group">
+            <input type="text" id="capcut-folder-path" class="file-input" readonly placeholder="No folder selected" />
+            <button id="capcut-browse-btn" class="btn-secondary">Browse</button>
+            <button id="capcut-refresh-btn" class="btn-secondary">Refresh</button>
+          </div>
+        </div>
+
+        <!-- Search Section -->
+        <div class="form-section">
+          <label class="form-label" style="font-weight: bold;">Search Projects:</label>
+          <input type="text" id="capcut-search-input" class="form-input" placeholder="Type to filter projects..." />
+        </div>
+
+        <!-- Projects List -->
+        <div class="form-section">
+          <label class="form-label" style="font-weight: bold;">Select Projects to Process:</label>
+          <div id="capcut-projects-list" class="projects-list"></div>
+        </div>
+
+        <!-- Cache Bust Option -->
+        <div class="form-section checkbox-section">
+          <label class="checkbox-label">
+            <input type="checkbox" id="capcut-cache-bust" />
+            Force CapCut cache refresh (rename folder & update metadata)
+          </label>
+        </div>
+
+        <!-- Process Button -->
+        <div class="form-section">
+          <button id="capcut-process-btn" class="btn-primary" style="width: 100%; padding: 15px; font-size: 16px;">
+            Process Selected Projects
+          </button>
+        </div>
+
+        <!-- Log Area -->
+        <div class="log-section">
+          <label class="form-label">Status:</label>
+          <div id="capcut-log" class="log-output"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="tool-footer">
+          <span>© 2026 TranDucThang's Clip Shuffler</span>
+          <a href="#" id="fb-link-capcut">Facebook</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 5: CapCut Auto Render -->
+    <div id="capcut-render-tab" class="tab-content">
+      <div class="tool-container">
+        <h1>CapCut Auto Render (Deprecated)</h1>
+
+        <!-- Projects Path Selector -->
+        <div class="form-section">
+          <label class="form-label">Projects Folder:</label>
+          <div class="file-input-group">
+            <input type="text" id="render-projects-path" class="file-input" readonly placeholder="No folder selected" />
+            <button id="render-browse-btn" class="btn-secondary">Browse</button>
+          </div>
+        </div>
+
+        <!-- Projects List with Checkboxes -->
+        <div class="form-section">
+          <label class="form-label">Select Projects to Render:</label>
+          <div id="render-projects-list" class="projects-list"></div>
+        </div>
+
+        <!-- Delay Settings -->
+        <div class="form-section">
+          <label class="form-label">Step Delays (seconds):</label>
+          <div class="delays-grid">
+            <div class="delay-field">
+              <label>Click CapCut & search:</label>
+              <input type="number" id="delay-1-2" class="delay-input" min="0" value="1" />
+            </div>
+            <div class="delay-field">
+              <label>Search for project:</label>
+              <input type="number" id="delay-3" class="delay-input" min="0" value="2" />
+            </div>
+            <div class="delay-field">
+              <label>Click project:</label>
+              <input type="number" id="delay-4" class="delay-input" min="0" value="1" />
+            </div>
+            <div class="delay-field">
+              <label>Cancel link media:</label>
+              <input type="number" id="delay-5" class="delay-input" min="0" value="1" />
+            </div>
+            <div class="delay-field">
+              <label>Render (Ctrl+E):</label>
+              <input type="number" id="delay-6" class="delay-input" min="0" value="2" />
+            </div>
+            <div class="delay-field">
+              <label>Click export:</label>
+              <input type="number" id="delay-7" class="delay-input" min="0" value="1" />
+            </div>
+            <div class="delay-field">
+              <label>Wait for share & cancel:</label>
+              <input type="number" id="delay-8" class="delay-input" min="0" value="1200" />
+            </div>
+            <div class="delay-field">
+              <label>Menu & home:</label>
+              <input type="number" id="delay-9-10" class="delay-input" min="0" value="1" />
+            </div>
+            <div class="delay-field">
+              <label>Cancel search:</label>
+              <input type="number" id="delay-11" class="delay-input" min="0" value="1" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Start Button -->
+        <div class="form-section">
+          <button id="render-start-btn" class="btn-primary" style="width: 100%; padding: 15px; font-size: 16px;">
+            Start Rendering Process
+          </button>
+        </div>
+
+        <!-- Log Area -->
+        <div class="log-section">
+          <label class="form-label">Log:</label>
+          <div id="render-log" class="log-output"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="tool-footer">
+          <span>© 2026 TranDucThang's CapCut Auto Render</span>
+          <a href="#" id="fb-link-render">Facebook</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 6: Auto Add Effect & Title -->
+    <div id="capcut-effect-title-tab" class="tab-content">
+      <div class="tool-container">
+        <h1>Auto Add Effect & Title</h1>
+
+        <!-- Folder Selection -->
+        <div class="form-section">
+          <label class="form-label" style="font-weight: bold;">CapCut Master Folder:</label>
+          <div class="file-input-group">
+            <input type="text" id="effect-title-folder-path" class="file-input" readonly
+              placeholder="No folder selected" />
+            <button id="effect-title-browse-btn" class="btn-secondary">Browse</button>
+            <button id="effect-title-refresh-btn" class="btn-secondary">Refresh</button>
+          </div>
+        </div>
+
+        <!-- Search Section -->
+        <div class="form-section">
+          <label class="form-label" style="font-weight: bold;">Search Projects:</label>
+          <input type="text" id="effect-title-search-input" class="form-input"
+            placeholder="Type to filter projects..." />
+        </div>
+
+        <!-- Projects List -->
+        <div class="form-section">
+          <label class="form-label" style="font-weight: bold;">Select Projects to Process:</label>
+          <div id="effect-title-projects-list" class="projects-list"></div>
+        </div>
+
+        <!-- Auto Add Effect Checkbox -->
+        <div class="form-section checkbox-section">
+          <label class="checkbox-label">
+            <input type="checkbox" id="effect-title-add-effect" />
+            Auto Add Effect
+          </label>
+        </div>
+
+        <!-- Auto Add Title Checkbox & Fields -->
+        <div class="form-section checkbox-section">
+          <label class="checkbox-label">
+            <input type="checkbox" id="effect-title-add-title" />
+            Auto Add Title
+          </label>
+        </div>
+
+        <!-- Log Markers Time Checkbox (Checked by Default) -->
+        <div class="form-section checkbox-section">
+          <label class="checkbox-label">
+            <input type="checkbox" id="effect-title-log-markers-time" checked />
+            Log Markers Time
+          </label>
+        </div>
+
+        <!-- Title Text Input (Hidden by Default) -->
+        <div class="form-section" id="effect-title-text-section" style="display: none;">
+          <label class="form-label" style="font-weight: bold;">Input Text:</label>
+          <textarea id="effect-title-text-input" class="form-input" placeholder="Paste your text here..."
+            style="width: 100%; box-sizing: border-box; min-height: 120px; resize: none; font-family: monospace;">
+          </textarea>
+          <label class="checkbox-label">
+            <input type="checkbox" id="effect-title-skip-intro" />
+            Skip Intro<!-- Skiping the first marker -->
+          </label>
+        </div>
+
+        <!-- Extracted Text Display (Hidden by Default) -->
+        <div class="form-section" id="effect-title-extracted-section" style="display: none;">
+          <label class="form-label" style="font-weight: bold;">Extracted Text:</label>
+          <div id="effect-title-extracted-output" class="log-output"
+            style="max-height: 200px; overflow-y: auto; color:black; background-color: #ffffff; border: 1px solid #cbd5e0; border-radius: 4px; padding: 10px; font-family: monospace; white-space: pre-wrap; word-wrap: break-word;">
+          </div>
+        </div>
+
+        <!-- Process Button -->
+        <div class="form-section">
+          <button id="effect-title-process-btn" class="btn-primary"
+            style="width: 100%; padding: 15px; font-size: 16px;">
+            Process Selected Projects
+          </button>
+        </div>
+
+        <!-- Log Area -->
+        <div class="log-section">
+          <label class="form-label">Status:</label>
+          <div id="effect-title-log" class="log-output"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="tool-footer">
+          <span>© 2026 TranDucThang's Auto Effect & Title</span>
+          <a href="#" id="fb-link-effect-title">Facebook</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="settings-modal">
+    <div class="settings-modal-content">
+      <div class="settings-modal-header">
+        <h2>Settings</h2>
+        <button id="settings-close-btn" class="settings-close-btn">✕</button>
+      </div>
+
+      <div class="settings-modal-body">
+        <!-- Autosave Interval Setting -->
+        <div class="settings-section">
+          <label class="settings-label">Auto-save Interval (minutes):</label>
+          <div class="settings-input-group">
+            <input type="number" id="autosave-interval-input" class="settings-input" min="1" max="60" value="1" />
+            <span class="settings-hint">How often to auto-save your data</span>
+          </div>
+        </div>
+
+        <!-- Marking Method Setting -->
+        <div class="settings-section">
+          <div class="settings-checkbox-group">
+            <input type="checkbox" id="marking-method-toggle" class="settings-checkbox" />
+            <label for="marking-method-toggle" class="settings-checkbox-label">
+              <strong>Offset Marking Method</strong>
+              <span class="settings-hint">When enabled, takes timestamp 5 seconds before pressing the marking key</span>
+            </label>
+          </div>
+          <div class="marking-method-info">
+            <div class="info-box">
+              <strong>Disabled:</strong> Takes exact timestamp when you press the marking key
+            </div>
+            <div class="info-box">
+              <strong>Enabled:</strong> Takes timestamp 5 seconds before you press the key (e.g., press at 8:40, marker
+              set to 8:35)
+            </div>
+          </div>
+        </div>
+
+        <!-- Credit Section -->
+        <div class="settings-credit-section">
+          <div class="credit-content">
+            <h3>Rhymx's Youtube Ultimate Tool</h3>
+            <p>Made with ❤️ by TranDucThang</p>
+            <a href="#" id="credit-facebook-link" class="credit-link">Follow on Facebook</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-modal-footer">
+        <button id="settings-save-btn" class="settings-btn-primary">Save Settings</button>
+        <button id="settings-cancel-btn" class="settings-btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+  <script src="tools-handler.js"></script>
+</body>
+
 </html>
