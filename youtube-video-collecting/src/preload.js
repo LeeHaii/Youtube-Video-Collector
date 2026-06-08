@@ -29,7 +29,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startCapcutAutoRender: (projectPaths, delays) => ipcRenderer.invoke('start-capcut-auto-render', projectPaths, delays),
 
   // YouTube Trimmer APIs
-  trimYouTubeVideo: (url, startSeconds, endSeconds, outputPath) => ipcRenderer.invoke('trim-youtube-video', url, startSeconds, endSeconds, outputPath),
+  trimYouTubeVideo: (url, startSeconds, endSeconds, outputPath, cookieHeader) => ipcRenderer.invoke('trim-youtube-video', url, startSeconds, endSeconds, outputPath, cookieHeader),
+  getWebviewCookies: (webContentsId, url) => ipcRenderer.invoke('get-webview-cookies', webContentsId, url),
 
   // YouTube Collector - Load/Save
   openLoadDialog: () => ipcRenderer.invoke('open-load-dialog'),

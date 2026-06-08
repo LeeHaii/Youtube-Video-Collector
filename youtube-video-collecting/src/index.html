@@ -206,99 +206,96 @@
       <div class="tool-container">
         <h1>YouTube Trimmer</h1>
 
-        <!-- Output Folder Selector -->
-        <div class="form-section">
-          <label class="form-label">Output Folder:</label>
-          <div class="file-input-group">
-            <input type="text" id="trimmer-output-path" class="file-input" readonly placeholder="No folder selected" />
-            <button id="trimmer-output-browse-btn" class="btn-secondary">Browse</button>
-          </div>
-        </div>
-
-        <!-- YouTube URL Input -->
-        <div class="form-section">
-          <label class="form-label">YouTube URL:</label>
-          <div class="file-input-group">
-            <input type="text" id="trimmer-url-input" class="form-input" placeholder="Paste YouTube URL here..." />
-            <button id="trimmer-url-ok-btn" class="btn-secondary">OK</button>
-          </div>
-        </div>
-
-        <!-- Timestamps and Download - Horizontal Layout -->
-        <div class="trimmer-controls-row">
-          <!-- Start Timestamp -->
-          <div class="trimmer-timestamp-section">
-            <label class="form-label">Start Timestamp:</label>
-            <div class="timestamp-input-group">
-              <div class="timestamp-field">
-                <label>HH</label>
-                <input type="number" id="trimmer-start-hours" class="timestamp-input" min="0" max="23" value="0" />
-              </div>
-              <span class="timestamp-separator">:</span>
-              <div class="timestamp-field">
-                <label>MM</label>
-                <input type="number" id="trimmer-start-minutes" class="timestamp-input" min="0" max="59" value="0" />
-              </div>
-              <span class="timestamp-separator">:</span>
-              <div class="timestamp-field">
-                <label>SS</label>
-                <input type="number" id="trimmer-start-seconds" class="timestamp-input" min="0" max="59" value="0" />
-              </div>
-              <span class="timestamp-separator">.</span>
-              <div class="timestamp-field">
-                <label>MS</label>
-                <input type="number" id="trimmer-start-ms" class="timestamp-input" min="0" max="999" value="0" />
-              </div>
+        <div class="trimmer-layout">
+          <div class="trimmer-left">
+            <label class="form-label">Video Preview</label>
+            <div class="trimmer-webview-container">
+              <webview id="trimmer-webview" src="https://www.youtube.com"
+                sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation">
+              </webview>
             </div>
           </div>
 
-          <!-- End Timestamp -->
-          <div class="trimmer-timestamp-section">
-            <label class="form-label">End Timestamp:</label>
-            <div class="timestamp-input-group">
-              <div class="timestamp-field">
-                <label>HH</label>
-                <input type="number" id="trimmer-end-hours" class="timestamp-input" min="0" max="23" value="0" />
-              </div>
-              <span class="timestamp-separator">:</span>
-              <div class="timestamp-field">
-                <label>MM</label>
-                <input type="number" id="trimmer-end-minutes" class="timestamp-input" min="0" max="59" value="0" />
-              </div>
-              <span class="timestamp-separator">:</span>
-              <div class="timestamp-field">
-                <label>SS</label>
-                <input type="number" id="trimmer-end-seconds" class="timestamp-input" min="0" max="59" value="0" />
-              </div>
-              <span class="timestamp-separator">.</span>
-              <div class="timestamp-field">
-                <label>MS</label>
-                <input type="number" id="trimmer-end-ms" class="timestamp-input" min="0" max="999" value="0" />
+          <div class="trimmer-right">
+            <div class="form-section">
+              <label class="form-label">Output Folder:</label>
+              <div class="file-input-group">
+                <input type="text" id="trimmer-output-path" class="file-input" readonly placeholder="No folder selected" />
+                <button id="trimmer-output-browse-btn" class="btn-secondary">Browse</button>
               </div>
             </div>
-          </div>
 
-          <!-- Download Button -->
-          <div class="trimmer-download-section">
-            <label class="form-label">&nbsp;</label>
-            <button id="trimmer-download-btn" class="btn-primary" style="height: 44px;">Download Trimmed Video</button>
-          </div>
-        </div>
+            <div class="form-section">
+              <label class="form-label">YouTube URL:</label>
+              <div class="file-input-group">
+                <input type="text" id="trimmer-url-input" class="form-input" placeholder="Paste YouTube URL here..." />
+                <button id="trimmer-url-ok-btn" class="btn-secondary">OK</button>
+              </div>
+            </div>
 
-        <!-- Video Preview WebView -->
-        <div class="form-section">
-          <label class="form-label">Video Player:</label>
-          <div class="trimmer-webview-container">
-            <webview id="trimmer-webview" src="about:blank"
-              sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation">
-            </webview>
-          </div>
-        </div>
+            <div class="form-section trimmer-controls-row">
+              <div class="trimmer-timestamp-section">
+                <label class="form-label">Start Timestamp:</label>
+                <div class="timestamp-input-group">
+                  <div class="timestamp-field">
+                    <label>HH</label>
+                    <input type="number" id="trimmer-start-hours" class="timestamp-input" min="0" max="23" value="0" />
+                  </div>
+                  <span class="timestamp-separator">:</span>
+                  <div class="timestamp-field">
+                    <label>MM</label>
+                    <input type="number" id="trimmer-start-minutes" class="timestamp-input" min="0" max="59" value="0" />
+                  </div>
+                  <span class="timestamp-separator">:</span>
+                  <div class="timestamp-field">
+                    <label>SS</label>
+                    <input type="number" id="trimmer-start-seconds" class="timestamp-input" min="0" max="59" value="0" />
+                  </div>
+                  <span class="timestamp-separator">.</span>
+                  <div class="timestamp-field">
+                    <label>MS</label>
+                    <input type="number" id="trimmer-start-ms" class="timestamp-input" min="0" max="999" value="0" />
+                  </div>
+                </div>
+              </div>
 
-        <!-- Log Area -->
-        <div class="log-section">
-          <label class="form-label">Log:</label>
-          <div id="trimmer-log" class="log-output"></div>
+              <div class="trimmer-timestamp-section">
+                <label class="form-label">End Timestamp:</label>
+                <div class="timestamp-input-group">
+                  <div class="timestamp-field">
+                    <label>HH</label>
+                    <input type="number" id="trimmer-end-hours" class="timestamp-input" min="0" max="23" value="0" />
+                  </div>
+                  <span class="timestamp-separator">:</span>
+                  <div class="timestamp-field">
+                    <label>MM</label>
+                    <input type="number" id="trimmer-end-minutes" class="timestamp-input" min="0" max="59" value="0" />
+                  </div>
+                  <span class="timestamp-separator">:</span>
+                  <div class="timestamp-field">
+                    <label>SS</label>
+                    <input type="number" id="trimmer-end-seconds" class="timestamp-input" min="0" max="59" value="0" />
+                  </div>
+                  <span class="timestamp-separator">.</span>
+                  <div class="timestamp-field">
+                    <label>MS</label>
+                    <input type="number" id="trimmer-end-ms" class="timestamp-input" min="0" max="999" value="0" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <button id="trimmer-download-btn" class="btn-primary" style="width: 100%; padding: 15px; font-size: 16px;">
+                Download Trimmed Video
+              </button>
+            </div>
+
+            <div class="log-section trimmer-log-section">
+              <label class="form-label">Log:</label>
+              <div id="trimmer-log" class="log-output"></div>
+            </div>
+          </div>
         </div>
 
         <!-- Footer -->

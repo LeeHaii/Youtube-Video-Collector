@@ -1096,6 +1096,32 @@ function initTrimmer() {
 
   let currentTrimmerUrl = '';
 
+  function updateTrimmerUrlField(url) {
+    if (!url || typeof url !== 'string') return;
+    const normalizedUrl = url.trim();
+    if (!normalizedUrl) return;
+    currentTrimmerUrl = normalizedUrl;
+    trimmerUrlInput.value = normalizedUrl;
+    appendTrimmerLog(`🔗 [WEBVIEW] URL updated: ${normalizedUrl}`);
+  }
+
+  async function refreshTrimmerUrlFromWebview() {
+    if (!trimmerWebview || typeof trimmerWebview.executeJavaScript !== 'function') return;
+    try {
+      const url = await trimmerWebview.executeJavaScript('window.location.href');
+      if (url && url !== currentTrimmerUrl) {
+        updateTrimmerUrlField(url);
+      }
+    } catch (err) {
+      console.warn('⚠️ Failed to refresh trimmer URL from webview:', err);
+    }
+  }
+
+  // Update field when the embedded preview navigates
+  trimmerWebview.addEventListener('did-navigate', () => refreshTrimmerUrlFromWebview());
+  trimmerWebview.addEventListener('did-navigate-in-page', () => refreshTrimmerUrlFromWebview());
+  trimmerWebview.addEventListener('dom-ready', () => refreshTrimmerUrlFromWebview());
+
   // Verify all elements loaded
   const trimmerElements = {
     outputPath: trimmerOutputPath,
@@ -1364,12 +1390,31 @@ function initTrimmer() {
       trimmerDownloadBtn.disabled = true;
       console.log(`🚀 Starting trim: ${startDisplay} → ${endDisplay}`);
       appendTrimmerLog(`🚀 [DOWNLOAD] Starting trim: ${startDisplay} → ${endDisplay}`);
-      
+
+      let cookieHeader = '';
+      try {
+        if (typeof trimmerWebview.getWebContentsId === 'function') {
+          cookieHeader = await window.electronAPI.getWebviewCookies(
+            trimmerWebview.getWebContentsId(),
+            currentTrimmerUrl || trimmerUrlInput.value.trim()
+          );
+          if (cookieHeader) {
+            appendTrimmerLog(`🔐 [COOKIE] Loaded cookies from current session`);
+          } else {
+            appendTrimmerLog('⚠️ [COOKIE] No cookies were returned from the webview session');
+          }
+        }
+      } catch (cookieErr) {
+        console.warn('⚠️ Failed to fetch webview cookies:', cookieErr);
+        appendTrimmerLog('⚠️ [COOKIE] Could not retrieve cookies from the webview');
+      }
+
       const result = await window.electronAPI.trimYouTubeVideo(
         currentTrimmerUrl,
         startSeconds,
         endSeconds,
-        trimmerOutputPath.value
+        trimmerOutputPath.value,
+        cookieHeader
       );
 
       if (result.success) {

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, session, safeStorage, net } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, session, safeStorage, net, webContents } = require('electron');
 const path = require('node:path');
 const fs = require('fs');
 const { spawn, execFile, execSync } = require('child_process');
@@ -1192,8 +1192,26 @@ ipcMain.on('webview-message', (event, { channel, args }) => {
   mainWindow.webContents.send(channel, ...args);
 });
 
+ipcMain.handle('get-webview-cookies', async (event, webContentsId, url) => {
+  try {
+    const wc = webContents.fromId(webContentsId);
+    if (!wc) {
+      throw new Error('WebContents not found for id: ' + webContentsId);
+    }
+    const wcSession = wc.session || session.defaultSession;
+    const cookies = await wcSession.cookies.get({ url });
+    if (!cookies || cookies.length === 0) {
+      return '';
+    }
+    return cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
+  } catch (error) {
+    console.error('❌ Failed to get webview cookies:', error.message);
+    return '';
+  }
+});
+
 // YouTube Trimmer - Trim Video
-ipcMain.handle('trim-youtube-video', async (event, url, startSeconds, endSeconds, outputPath) => {
+ipcMain.handle('trim-youtube-video', async (event, url, startSeconds, endSeconds, outputPath, cookieHeader) => {
   try {
     // Verify output folder exists
     if (!fs.existsSync(outputPath)) {
@@ -1212,14 +1230,21 @@ ipcMain.handle('trim-youtube-video', async (event, url, startSeconds, endSeconds
     console.log(`🎬 URL: ${url}`);
     console.log(`⏱️ Trim: ${startSeconds}s to ${endSeconds}s`);
     console.log(`📁 Output: ${outputPath}`);
+    if (cookieHeader) {
+      console.log('🔐 Using cookie header for authenticated download');
+    }
 
     // Spawn executable process
-    const trimProcess = spawn(exePath, [
+    const args = [
       url,
       startSeconds.toString(),
       endSeconds.toString(),
-      outputPath
-    ], {
+      outputPath,
+    ];
+    if (cookieHeader) {
+      args.push('--cookie-header', cookieHeader);
+    }
+    const trimProcess = spawn(exePath, args, {
       stdio: 'pipe',
       shell: false,
     });
