@@ -130,14 +130,9 @@ def trim_youtube_video(
                     "http_headers": http_headers,
                     "external_downloader_args": {"ffmpeg": ["-loglevel", "panic"]},
                     
-                    # FIX 1: Tell yt-dlp to download the required remote EJS solver scripts
-                    "remote_components": ["ejs:github"], 
-                    
                     "extractor_args": {
                         "youtube": {
-                            # FIX 2: Swap the blocked 'tv' client out for 'android' or 'ios'
-                            "player_client": ["android", "web"], 
-                            "js_args": ["--node-binary", node_exe] 
+                            "player_client": ["ios", "tv_embedded"],
                         }
                     }
                 }
@@ -145,7 +140,12 @@ def trim_youtube_video(
                 if cookie_file_path:
                     ydl_opts["cookiefile"] = cookie_file_path
                 else:
-                    ydl_opts["cookiesfrombrowser"] = ("chrome", None, None, None)
+                    # Only try browser cookies if Chrome is likely available; don't crash if it's not
+                    try:
+                        import browser_cookie3  # noqa: F401 — check it's bundled
+                        ydl_opts["cookiesfrombrowser"] = ("chrome", None, None, None)
+                    except Exception:
+                        pass
                 
                 with YoutubeDL(ydl_opts) as ydl:
                     ydl.cache.remove()
