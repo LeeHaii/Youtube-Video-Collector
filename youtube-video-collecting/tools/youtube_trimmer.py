@@ -71,14 +71,13 @@ def trim_youtube_video(
     cookie_header: str = '',
     log_callback=print,
 ) -> str:
-    """Download and trim a YouTube video to a specific time range."""
+    """Download a specific time range of a YouTube video directly from the server."""
     start = int(start_time)
     end = int(end_time)
 
     timestamp = int(time.time())
     output_filename = f"trimmed_{start}-{end}_{timestamp}.mp4"
     output_file = os.path.join(output_path, output_filename)
-    temp_file = os.path.join(output_path, f"temp_{timestamp}.mp4")
     
     # Grab the Node.js path injected by our hunting function
     node_env = os.environ.get('YT_NODE_PATH_LOG', '')
@@ -88,8 +87,8 @@ def trim_youtube_video(
         if potential_node.exists():
             node_exe_path = str(potential_node)
             
-    log_callback(f"🎬 Trimming video from {start}s to {end}s...")
-    log_callback(f"📁 Output: {output_file}")
+    log_callback(f"🎬 Requesting targeted segment from {start}s to {end}s...")
+    log_callback(f"📁 Target Output: {output_file}")
     log_callback(f"⚙️ Node.js Injected Path: {node_exe_path if node_exe_path else 'NOT FOUND - JS Puzzles May Fail'}\n")
 
     format_fallbacks = [
@@ -115,7 +114,7 @@ def trim_youtube_video(
         log_callback(f"💭 No cookies provided, will attempt extraction from browser if available...")
 
     try:
-        log_callback("⏳ Downloading video...")
+        log_callback("⏳ Connecting to stream chunks...")
         downloaded = False
         last_error = ""
         
@@ -125,12 +124,20 @@ def trim_youtube_video(
                 
                 ydl_opts = {
                     "format": fmt,
-                    "outtmpl": temp_file.replace('.mp4', ''),
+                    # Write directly to the final path, auto-handling extensions
+                    "outtmpl": os.path.join(output_path, f"trimmed_{start}-{end}_{timestamp}.%(ext)s"),
                     "merge_output_format": "mp4",
                     "quiet": False,
                     "no_warnings": False,
                     "socket_timeout": 30,
                     "http_headers": http_headers,
+                    
+                    # == THIS IS THE FIX ==
+                    # Forces yt-dlp to request only the necessary bytes
+                    "download_ranges": lambda info, ydl, s=start, e=end: [{'start_time': s, 'end_time': e}],
+                    "force_keyframes_at_cuts": True,
+                    # =====================
+
                     "external_downloader_args": {"ffmpeg": ["-loglevel", "panic"]},
 
                     # ALLOW CACHING: yt-dlp must be able to cache the JS solver script
@@ -171,52 +178,26 @@ def trim_youtube_video(
                 continue
         
         if not downloaded:
-            raise Exception(f"Could not download video with any format. Details:\n{last_error}")
+            raise Exception(f"Could not fetch segment with any format. Details:\n{last_error}")
         
-        actual_temp = temp_file
-        if not os.path.exists(actual_temp):
-            for ext in ['.mp4', '.mkv', '.webm']:
-                test_path = temp_file.replace('.mp4', '') + ext
+        # Verify the file was created cleanly
+        actual_output = output_file
+        if not os.path.exists(actual_output):
+            for ext in ['.mkv', '.webm']:
+                test_path = output_file.replace('.mp4', ext)
                 if os.path.exists(test_path):
-                    actual_temp = test_path
+                    actual_output = test_path
                     break
         
-        if not os.path.exists(actual_temp):
-            raise Exception(f"Downloaded file not found")
+        if not os.path.exists(actual_output):
+            raise Exception("Downloaded fragment target could not be verified on disk.")
         
-        log_callback(f"✅ Downloaded successfully, trimming with ffmpeg...")
-        
-        ff = find_ffmpeg_exe()
-        if ff is None:
-            raise Exception("ffmpeg not found for trimming")
-        
-        cmd = [
-            str(ff), "-i", actual_temp,
-            "-ss", str(start), "-to", str(end),
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-b:a", "192k", "-y", output_file
-        ]
-        
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-        if result.returncode != 0:
-            raise Exception(f"ffmpeg trim failed: {result.stderr[:200]}")
-        
-        if os.path.exists(actual_temp):
-            try: os.remove(actual_temp)
-            except: pass
-        
-        log_callback(f"✅ Video trimmed successfully!")
-        log_callback(f"OUTPUT_FILE:{output_file}")
-        return output_file
+        log_callback(f"✅ Video segment downloaded successfully!")
+        log_callback(f"OUTPUT_FILE:{actual_output}")
+        return actual_output
 
     except Exception as e:
-        if cookie_file_path and os.path.exists(cookie_file_path):
-            try: os.remove(cookie_file_path)
-            except: pass
-        if os.path.exists(temp_file):
-            try: os.remove(temp_file)
-            except: pass
-        log_callback(f"❌ Error during trimming:\n{str(e)}")
+        log_callback(f"❌ Error during segment extraction:\n{str(e)}")
         raise
     finally:
         if cookie_file_path and os.path.exists(cookie_file_path):
