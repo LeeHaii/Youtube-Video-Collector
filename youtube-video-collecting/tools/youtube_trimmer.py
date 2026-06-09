@@ -80,21 +80,27 @@ def trim_youtube_video(
     output_file = os.path.join(output_path, output_filename)
     temp_file = os.path.join(output_path, f"temp_{timestamp}.mp4")
     
+    # Grab the Node.js path injected by our hunting function
+    node_env = os.environ.get('YT_NODE_PATH_LOG', '')
+    node_exe_path = None
+    if node_env:
+        potential_node = Path(node_env) / "node.exe"
+        if potential_node.exists():
+            node_exe_path = str(potential_node)
+            
     log_callback(f"🎬 Trimming video from {start}s to {end}s...")
     log_callback(f"📁 Output: {output_file}")
-    
-    # Check if our environment injection worked
-    log_callback(f"⚙️ Node.js Injected Path: {os.environ.get('YT_NODE_PATH_LOG', 'NOT FOUND - JS Puzzles May Fail')}\n")
+    log_callback(f"⚙️ Node.js Injected Path: {node_exe_path if node_exe_path else 'NOT FOUND - JS Puzzles May Fail'}\n")
 
     format_fallbacks = [
-        "best[height<=2160]", 
-        "best[height<=1080]",  
-        "best",
+        "bestvideo[height<=2160]+bestaudio/best[height<=2160]", 
+        "bestvideo[height<=1080]+bestaudio/best[height<=1080]",  
+        "bestvideo+bestaudio/best",
         "worst",
     ]
 
     http_headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
     cookie_file_path = None
@@ -117,22 +123,32 @@ def trim_youtube_video(
             try:
                 log_callback(f"  Trying download format option: {fmt}...")
                 
-                node_exe = shutil.which("node") or os.path.join(os.environ.get('YT_NODE_PATH_LOG', ''), 'node.exe')
-                
                 ydl_opts = {
                     "format": fmt,
                     "outtmpl": temp_file.replace('.mp4', ''),
                     "merge_output_format": "mp4",
                     "quiet": False,
                     "no_warnings": False,
-                    "no_cache_dir": True,
                     "socket_timeout": 30,
                     "http_headers": http_headers,
                     "external_downloader_args": {"ffmpeg": ["-loglevel", "panic"]},
+
+                    # ALLOW CACHING: yt-dlp must be able to cache the JS solver script
+                    "no_cache_dir": False,
                     
+                    # RUNTIME OVERRIDE: Explicitly force yt-dlp to use Node.js
+                    "js_runtimes": {
+                        "node": {
+                            "path": node_exe_path
+                        } if node_exe_path else {}
+                    },
+
+                    # REMOTE EJS: Authorize yt-dlp to download the newest challenge solvers
+                    "remote_components": ["ejs:github", "ejs:npm"],
+
                     "extractor_args": {
                         "youtube": {
-                            "player_client": ["ios", "tv_embedded"],
+                            "player_client": ["default", "-android_sdkless"],
                         }
                     }
                 }
@@ -140,15 +156,12 @@ def trim_youtube_video(
                 if cookie_file_path:
                     ydl_opts["cookiefile"] = cookie_file_path
                 else:
-                    # Only try browser cookies if Chrome is likely available; don't crash if it's not
                     try:
-                        import browser_cookie3  # noqa: F401 — check it's bundled
                         ydl_opts["cookiesfrombrowser"] = ("chrome", None, None, None)
                     except Exception:
                         pass
                 
                 with YoutubeDL(ydl_opts) as ydl:
-                    ydl.cache.remove()
                     ydl.extract_info(url, download=True)
                 
                 downloaded = True
@@ -241,7 +254,6 @@ def find_node_exe():
         Path('C:/Program Files (x86)/nodejs'),
     ]
     
-    # Check both NVM locations just in case
     for base_dir in [app_data, local_app_data]:
         nvm_dir = Path(base_dir) / 'nvm'
         if nvm_dir.exists():
@@ -284,7 +296,7 @@ def main():
     new_path = str(ff.parent) + os.pathsep + current_path
     if node_path:
         new_path = str(node_path) + os.pathsep + new_path
-        os.environ['YT_NODE_PATH_LOG'] = str(node_path) # Export variable solely so we can log it up top
+        os.environ['YT_NODE_PATH_LOG'] = str(node_path) 
         
     os.environ['PATH'] = new_path
     
@@ -294,7 +306,7 @@ def main():
             cookie_header=cookie_header, log_callback=print
         )
         sys.exit(0)
-    except Exception as e:
+    except Exception:
         sys.exit(1)
 
 
