@@ -701,27 +701,26 @@ function updateRowsTable() {
   rows.forEach((row, rowIndex) => {
     const tr = document.createElement('tr');
     
-    // Row number cell - make it clickable button
+    // Cell 1: Row number
     const numCell = document.createElement('td');
     numCell.className = 'row-num';
-    
     const rowBtn = document.createElement('button');
     rowBtn.className = 'row-num-button';
     rowBtn.textContent = `${rowIndex + 1}`;
     rowBtn.title = 'Click to edit this row';
     rowBtn.addEventListener('click', () => editExistingRow(rowIndex));
-    
     numCell.appendChild(rowBtn);
     tr.appendChild(numCell);
     
-    // Add URL and timestamps alternately
+    // Add URL and timestamps as separate cells (Cell 2, 3, 4, 5, ...)
     for (let i = 0; i < row.length; i += 2) {
-      // URL cell - Make it a clickable button with delete option on hover
+      const url = row[i];
+      const timestamps = row[i + 1] || '';
+      
+      // URL cell
       const urlCell = document.createElement('td');
       urlCell.className = 'row-data url-data-cell';
-      const url = row[i];
       
-      // URL button
       const urlButton = document.createElement('button');
       urlButton.className = 'url-cell-button';
       urlButton.textContent = url;
@@ -729,10 +728,8 @@ function updateRowsTable() {
       urlButton.addEventListener('click', () => {
         loadRowToPanel(rowIndex, i);
       });
-      
       urlCell.appendChild(urlButton);
       
-      // Delete button (hidden by default, shown on hover)
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'delete-url-btn';
       deleteBtn.textContent = '✕';
@@ -741,19 +738,18 @@ function updateRowsTable() {
         e.stopPropagation();
         deleteUrlFromRow(rowIndex, i);
       });
-      
       urlCell.appendChild(deleteBtn);
+      
       tr.appendChild(urlCell);
       
       // Timestamps cell
       const tsCell = document.createElement('td');
       tsCell.className = 'row-data';
-      const timestamps = row[i + 1] || '';
       tsCell.textContent = timestamps;
       tr.appendChild(tsCell);
     }
     
-    // Add total timestamps count column
+    // Last cell: Total timestamp count
     const totalCell = document.createElement('td');
     totalCell.className = 'row-timestamp-count';
     totalCell.textContent = countTotalTimestamps(row);

@@ -107,7 +107,7 @@
                 <tr>
                   <th>Row</th>
                   <th>URL / Timestamps</th>
-                  <th style="text-align: center; width: 80px;">TS Count</th>
+                  <th>TS Count</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -220,7 +220,8 @@
             <div class="form-section">
               <label class="form-label">Output Folder:</label>
               <div class="file-input-group">
-                <input type="text" id="trimmer-output-path" class="file-input" readonly placeholder="No folder selected" />
+                <input type="text" id="trimmer-output-path" class="file-input" readonly
+                  placeholder="No folder selected" />
                 <button id="trimmer-output-browse-btn" class="btn-secondary">Browse</button>
               </div>
             </div>
@@ -244,12 +245,14 @@
                   <span class="timestamp-separator">:</span>
                   <div class="timestamp-field">
                     <label>MM</label>
-                    <input type="number" id="trimmer-start-minutes" class="timestamp-input" min="0" max="59" value="0" />
+                    <input type="number" id="trimmer-start-minutes" class="timestamp-input" min="0" max="59"
+                      value="0" />
                   </div>
                   <span class="timestamp-separator">:</span>
                   <div class="timestamp-field">
                     <label>SS</label>
-                    <input type="number" id="trimmer-start-seconds" class="timestamp-input" min="0" max="59" value="0" />
+                    <input type="number" id="trimmer-start-seconds" class="timestamp-input" min="0" max="59"
+                      value="0" />
                   </div>
                   <span class="timestamp-separator">.</span>
                   <div class="timestamp-field">
@@ -286,7 +289,8 @@
             </div>
 
             <div class="form-section">
-              <button id="trimmer-download-btn" class="btn-primary" style="width: 100%; padding: 15px; font-size: 16px;">
+              <button id="trimmer-download-btn" class="btn-primary"
+                style="width: 100%; padding: 15px; font-size: 16px;">
                 Download Trimmed Video
               </button>
             </div>

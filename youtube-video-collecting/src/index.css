@@ -618,9 +618,12 @@ body {
 /* URL Data Cell - Position relative for delete button */
 .url-data-cell {
   position: relative;
-  padding: 0 !important;
+  padding: 6px 8px !important;
   display: flex;
-  align-items: center;
+  flex-wrap: wrap; /* THE MAGIC FIX: lets items drop to the next line instead of squishing */
+  align-items: flex-start;
+  align-content: flex-start;
+  gap: 8px; /* Adds a nice space between each URL/timestamp */
 }
 
 /* Delete URL Button Style */
@@ -734,6 +737,11 @@ body {
   border-top: 2px solid #e0e0e0;
   height: 300px;
   flex-shrink: 0;
+
+  /* THE MAGIC FIX: Stops the grid track from blowing up the app width */
+  min-width: 0; 
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .rows-grid-section h3 {
@@ -765,10 +773,16 @@ body {
   border: 1px solid #ddd;
   border-radius: 4px;
   background-color: #fff;
+
+  /* Traps the horizontal scrollbar right here */
+  width: 100%;
+  overflow-x: auto; 
+  overflow-y: auto;
 }
 
 .rows-grid {
   width: 100%;
+  min-width: 1200px; /* Ensures the table is always wide enough to be readable, triggering Shift+Scroll */
   border-collapse: collapse;
   font-size: 11px;
   font-family: monospace;
@@ -805,7 +819,10 @@ body {
 .rows-grid tbody td {
   padding: 6px 8px;
   color: #333;
-  word-break: break-word;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere; /* Much smarter than break-all */
+  vertical-align: top;
   border-right: 1px solid #e0e0e0;
 }
 
@@ -836,6 +853,26 @@ body {
   min-width: 80px;
   white-space: nowrap;
   border-left: 2px solid #16a34a;
+}
+
+/* Excel-like table column width constraints */
+.rows-grid th:nth-child(1),
+.rows-grid td:nth-child(1) {
+  width: 60px;
+  min-width: 60px;
+  max-width: 60px;
+  text-align: center;
+}
+
+/* All timestamp columns (3rd, 5th, 7th, etc.) and count column */
+.rows-grid th:nth-child(odd):not(:nth-child(1)),
+.rows-grid td:nth-child(odd):not(:nth-child(1)),
+.rows-grid th:last-child,
+.rows-grid td:last-child {
+  width: 80px;
+  min-width: 80px;
+  max-width: 80px;
+  text-align: center;
 }
 
 /* YouTube Navigation Toolbar */
