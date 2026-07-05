@@ -155,7 +155,7 @@ def trim_youtube_video(
 
                     "extractor_args": {
                         "youtube": {
-                            "player_client": ["default", "-android_sdkless"],
+                            "player_client": ["default", "-android", "-android_sdkless", "-android_creator"],
                         }
                     }
                 }
@@ -219,6 +219,38 @@ def find_ffmpeg_exe():
     
     path = shutil.which('ffmpeg')
     if path: return Path(path)
+    
+    # If not found, dynamically download portable FFmpeg to LOCALAPPDATA
+    local_app_data = os.environ.get('LOCALAPPDATA', '')
+    if local_app_data:
+        portable_ffmpeg_dir = Path(local_app_data) / 'YoutubeVideoCollector' / 'FFmpeg'
+        existing_exe = next(portable_ffmpeg_dir.rglob('ffmpeg.exe'), None)
+        if existing_exe:
+            return existing_exe
+            
+        print("🎬 FFmpeg not found! Downloading portable FFmpeg (~30MB) (one-time setup)...")
+        portable_ffmpeg_dir.mkdir(parents=True, exist_ok=True)
+        import urllib.request
+        import zipfile
+        
+        ffmpeg_url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+        zip_path = portable_ffmpeg_dir / "ffmpeg.zip"
+        try:
+            urllib.request.urlretrieve(ffmpeg_url, zip_path)
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(portable_ffmpeg_dir)
+            
+            extracted_exe = next(portable_ffmpeg_dir.rglob('ffmpeg.exe'), None)
+            if extracted_exe:
+                print("✅ Portable FFmpeg downloaded successfully!")
+                return extracted_exe
+        except Exception as e:
+            print(f"❌ Failed to download portable FFmpeg: {e}")
+        finally:
+            if zip_path.exists():
+                try: zip_path.unlink()
+                except: pass
+                
     return None
 
 
@@ -244,6 +276,27 @@ def find_node_exe():
     for base in candidates:
         if base.exists() and (base / 'node.exe').exists():
             return base
+            
+    # If not found, dynamically download a portable node.exe to LOCALAPPDATA
+    if local_app_data:
+        portable_node_dir = Path(local_app_data) / 'YoutubeVideoCollector' / 'Node'
+        portable_node_exe = portable_node_dir / 'node.exe'
+        if portable_node_exe.exists():
+            return portable_node_dir
+            
+        print("🌍 Node.js not found! Downloading portable Node.js (~60MB) for JS challenges (one-time setup)...")
+        portable_node_dir.mkdir(parents=True, exist_ok=True)
+        import urllib.request
+        node_url = "https://nodejs.org/dist/v20.11.1/win-x64/node.exe"
+        try:
+            urllib.request.urlretrieve(node_url, portable_node_exe)
+            print("✅ Portable Node.js downloaded successfully!")
+            return portable_node_dir
+        except Exception as e:
+            print(f"❌ Failed to download portable Node.js: {e}")
+            if portable_node_exe.exists():
+                portable_node_exe.unlink()
+                
     return None
 
 
