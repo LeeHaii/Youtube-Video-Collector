@@ -2,3 +2,6 @@ pyautogui>=0.9.53
 Pillow>=9.0.0
 pyscreeze>=0.1.28
 keyboard>=0.13.5
+yt-dlp[default]==2026.7.4
+yt-dlp-ejs==0.8.0
+PyInstaller>=6.19,<7

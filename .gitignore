@@ -98,6 +98,9 @@ dist/
 out/
 build/
 *.spec.js
+.build-venv/
+__pycache__/
+*.py[cod]
 
 # OS files
 .DS_Store

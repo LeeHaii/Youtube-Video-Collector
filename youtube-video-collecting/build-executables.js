@@ -22,6 +22,11 @@ const SCRIPTS = [
   'youtube_trimmer.py',
 ];
 
+const YT_DLP_SCRIPTS = new Set([
+  '5_sec_downloader.py',
+  'youtube_trimmer.py',
+]);
+
 // Create dist directory if it doesn't exist
 if (!fs.existsSync(DIST_DIR)) {
   fs.mkdirSync(DIST_DIR, { recursive: true });
@@ -42,9 +47,13 @@ for (const script of SCRIPTS) {
   console.log(`📦 Compiling ${script}...`);
   
   try {
-    // PyInstaller command: compile to single executable in dist folder
+    // Clean prevents old yt-dlp bytecode from leaking into a newly dated executable.
+    // yt-dlp-ejs is loaded dynamically, so PyInstaller must collect it explicitly.
+    const ytDlpBundleArgs = YT_DLP_SCRIPTS.has(script)
+      ? ' --collect-all yt_dlp_ejs'
+      : '';
     execSync(
-      `pyinstaller --onefile --distpath "${DIST_DIR}" --specpath "${DIST_DIR}" --workpath "${DIST_DIR}/build" "${scriptPath}"`,
+      `pyinstaller --noconfirm --clean --onefile${ytDlpBundleArgs} --distpath "${DIST_DIR}" --specpath "${DIST_DIR}" --workpath "${DIST_DIR}/build" "${scriptPath}"`,
       { stdio: 'inherit', cwd: TOOLS_DIR }
     );
     console.log(`✅ ${scriptName}.exe created\n`);

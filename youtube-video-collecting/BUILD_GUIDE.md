@@ -29,12 +29,13 @@ npm --version
 
 ---
 
-## Step 1: Install PyInstaller
+## Step 1: Install the pinned Python build dependencies
 
-Install PyInstaller in your Python environment:
+Install from the requirements file so the executables contain the tested yt-dlp,
+EJS challenge solver, and PyInstaller versions:
 
 ```bash
-pip install pyinstaller
+python -m pip install -r tools/requirements.txt --upgrade
 ```
 
 Verify installation:
@@ -56,7 +57,7 @@ npm run build-exe
 This will:
 1. ✅ Compile all 6 Python scripts into standalone executables
 2. ✅ Place them in the `dist/` directory
-3. ✅ Bundle all dependencies (pyautogui, Pillow, pyscreeze, keyboard)
+3. ✅ Bundle all dependencies, including the pinned yt-dlp and yt-dlp-ejs solver
 
 **Output:**
 ```
@@ -75,9 +76,9 @@ If you get `pyinstaller: command not found`:
 - **Windows:** Restart your terminal or PowerShell after installing PyInstaller
 - **Alternative:** Run as `python -m PyInstaller` instead of `pyinstaller`
 
-If compilation fails with missing dependencies:
+If compilation fails with missing dependencies, reinstall the pinned build environment:
 ```bash
-pip install -r tools/requirements.txt --upgrade
+python -m pip install -r tools/requirements.txt --upgrade
 ```
 
 ---

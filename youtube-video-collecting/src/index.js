@@ -6,6 +6,12 @@ const os = require('os');
 const { ElectronBlocker } = require('@cliqz/adblocker-electron');
 const fetch = require('node-fetch');
 const { machineIdSync } = require('node-machine-id');
+const {
+  buildDownloadErrorSummary,
+  consumeDownloaderStdout,
+  createDownloadParseState,
+  mergeErrorsForCsv,
+} = require('./downloader-summary');
 
 // Suppress MaxListenersExceededWarning
 require('events').EventEmitter.defaultMaxListeners = 15;
@@ -115,6 +121,8 @@ let downloadProcess = null;
 let downloadStopFlagPath = null;  // Path to stop flag file for graceful shutdown
 let rateLimitErrors = [];  // Track rate limit errors: {url, timestamps}
 let ageRestrictionErrors = [];  // Track age restriction errors: {url, timestamps}
+let failedDownloadErrors = [];  // Track every failed clip, including YouTube 403s
+let latestDownloadSummary = null;
 let currentInputCsvPath = '';  // Store input CSV path for error extraction
 
 // ============================================================================
@@ -635,9 +643,15 @@ ipcMain.handle('get-autosave-path', async (event) => {
 // 5-Sec Downloader - Start Download
 ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax) => {
   try {
+    if (downloadProcess && downloadProcess.exitCode === null) {
+      return { success: false, error: 'A download is already running or stopping. Please wait for it to finish.' };
+    }
+
     // Reset error tracking
     rateLimitErrors = [];
     ageRestrictionErrors = [];
+    failedDownloadErrors = [];
+    latestDownloadSummary = null;
     currentInputCsvPath = csvPath;
 
     // Verify files exist
@@ -663,80 +677,76 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
     console.log(`⏱️  Row Sleep: ${rowSleepMin}-${rowSleepMax}s`);
 
     // Create a unique stop flag file path for graceful shutdown
-    downloadStopFlagPath = path.join(os.tmpdir(), `downloader-stop-flag-${Date.now()}.txt`);
-    console.log(`⚠️  Stop flag path: ${downloadStopFlagPath}`);
+    const stopFlagPath = path.join(os.tmpdir(), `downloader-stop-flag-${Date.now()}.txt`);
+    downloadStopFlagPath = stopFlagPath;
+    console.log(`⚠️  Stop flag path: ${stopFlagPath}`);
 
     // Spawn executable process WITHOUT shell to properly handle spaces in paths
-    downloadProcess = spawn(exePath, [csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, downloadStopFlagPath], {
+    const childProcess = spawn(exePath, [csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, stopFlagPath], {
       stdio: 'pipe',
       shell: false,
+      // The packaged Python process writes to pipes, which are otherwise block-buffered.
+      // Force current and future executable builds to stream each log line immediately.
+      env: {
+        ...process.env,
+        PYTHONIOENCODING: 'utf-8',
+        PYTHONUNBUFFERED: '1',
+      },
     });
+    downloadProcess = childProcess;
 
-    let errorSummaryMode = null;  // 'RATE_LIMIT' or 'AGE_RESTRICTION'
+    const parseState = createDownloadParseState();
 
     // Handle errors
-    downloadProcess.on('error', (error) => {
+    childProcess.on('error', (error) => {
       console.error(`❌ Failed to start download process: ${error.message}`);
       mainWindow.webContents.send('download-log', `❌ ERROR: Failed to start process: ${error.message}\n`);
-      downloadProcess = null;
+      if (downloadProcess === childProcess) downloadProcess = null;
     });
 
-    // Send output to renderer and parse errors
-    downloadProcess.stdout.on('data', (data) => {
+    // Send output to renderer and parse the downloader's chunk-safe structured report.
+    childProcess.stdout.on('data', (data) => {
       const message = data.toString();
       console.log(`[Download stdout]: ${message}`);
-      
-      // Parse error summary lines
-      if (message.includes('📊 ERROR_SUMMARY: RATE_LIMIT_ERRORS')) {
-        errorSummaryMode = 'RATE_LIMIT';
-      } else if (message.includes('📊 ERROR_SUMMARY: AGE_RESTRICTION_ERRORS')) {
-        errorSummaryMode = 'AGE_RESTRICTION';
-      } else if (errorSummaryMode && message.includes('|')) {
-        // Parse error line: URL|timestamps
-        const parts = message.trim().split('|');
-        if (parts.length === 2) {
-          const url = parts[0];
-          const timestamps = parts[1].split(';').map(Number).filter(t => !isNaN(t));
-          const errorObj = { url, timestamps };
-          
-          if (errorSummaryMode === 'RATE_LIMIT') {
-            rateLimitErrors.push(errorObj);
-          } else if (errorSummaryMode === 'AGE_RESTRICTION') {
-            ageRestrictionErrors.push(errorObj);
-          }
-        }
-      }
-      
+      consumeDownloaderStdout(parseState, message);
       mainWindow.webContents.send('download-log', message);
     });
 
-    downloadProcess.stderr.on('data', (data) => {
+    childProcess.stderr.on('data', (data) => {
       const message = data.toString();
       console.error(`[Download stderr]: ${message}`);
       mainWindow.webContents.send('download-log', `ERROR: ${message}`);
     });
 
-    downloadProcess.on('close', (code) => {
+    childProcess.on('close', (code) => {
+      consumeDownloaderStdout(parseState, '', true);
+      failedDownloadErrors = parseState.errors;
+      rateLimitErrors = failedDownloadErrors.filter((item) => item.category === 'RATE_LIMIT');
+      ageRestrictionErrors = failedDownloadErrors.filter((item) => item.category === 'AGE_RESTRICTION');
+      latestDownloadSummary = buildDownloadErrorSummary(parseState);
+
       console.log(`✅ Download process exited with code: ${code}`);
-      console.log(`📊 Rate Limit Errors: ${rateLimitErrors.length}`);
-      console.log(`📊 Age Restriction Errors: ${ageRestrictionErrors.length}`);
-      mainWindow.webContents.send('download-complete', code === 0);
-      mainWindow.webContents.send('download-error-summary', {
-        rateLimitCount: rateLimitErrors.length,
-        ageRestrictionCount: ageRestrictionErrors.length,
+      console.log('📊 Download summary:', latestDownloadSummary);
+      mainWindow.webContents.send('download-error-summary', latestDownloadSummary);
+      mainWindow.webContents.send('download-complete', {
+        success: code === 0,
+        partial: code === 2,
+        canceled: code === 3 || latestDownloadSummary.canceled,
+        code,
+        summary: latestDownloadSummary,
       });
-      downloadProcess = null;
+      if (downloadProcess === childProcess) downloadProcess = null;
       
       // Clean up stop flag file
-      if (downloadStopFlagPath && fs.existsSync(downloadStopFlagPath)) {
+      if (fs.existsSync(stopFlagPath)) {
         try {
-          fs.unlinkSync(downloadStopFlagPath);
+          fs.unlinkSync(stopFlagPath);
           console.log('🗑️  Stop flag file cleaned up');
         } catch (err) {
           console.warn('⚠️  Failed to delete stop flag file:', err.message);
         }
       }
-      downloadStopFlagPath = null;
+      if (downloadStopFlagPath === stopFlagPath) downloadStopFlagPath = null;
     });
 
     return { success: true };
@@ -748,39 +758,61 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
 
 // 5-Sec Downloader - Stop Download
 ipcMain.handle('stop-download', async (event) => {
-  if (downloadProcess && downloadStopFlagPath) {
+  const processToStop = downloadProcess;
+  const stopFlagPath = downloadStopFlagPath;
+  if (processToStop && processToStop.exitCode === null && stopFlagPath) {
     // Create the stop flag file to signal graceful shutdown
     try {
-      fs.writeFileSync(downloadStopFlagPath, 'STOP', 'utf8');
+      if (fs.existsSync(stopFlagPath)) {
+        return { success: true, alreadyStopping: true };
+      }
+      fs.writeFileSync(stopFlagPath, 'STOP', 'utf8');
       console.log('⏹️  Stop flag created, waiting for process to exit gracefully...');
       // Give the process 5 seconds to exit gracefully
       setTimeout(() => {
-        if (downloadProcess) {
+        if (processToStop.exitCode === null && !processToStop.killed) {
           console.log('⚠️  Process did not exit gracefully, killing it...');
-          downloadProcess.kill();
+          processToStop.kill();
         }
       }, 5000);
       return { success: true };
     } catch (err) {
       console.error('Error creating stop flag:', err.message);
       // Fallback to killing the process
-      downloadProcess.kill();
+      if (processToStop.exitCode === null && !processToStop.killed) processToStop.kill();
       return { success: true };
     }
   }
   return { success: false, error: 'No download in progress' };
 });
 
-// 5-Sec Downloader - Extract Rate Limit Errors to CSV
+function formatDownloadErrorsCsv(errors) {
+  return mergeErrorsForCsv(errors).map((errorItem) => {
+    const timestamps = errorItem.timestamps.map((timestamp) => {
+      const hours = Math.floor(timestamp / 3600);
+      const minutes = Math.floor((timestamp % 3600) / 60);
+      const seconds = Math.floor(timestamp % 60);
+      if (hours > 0) {
+        return `${hours}.${String(minutes).padStart(2, '0')}.${String(seconds).padStart(2, '0')}`;
+      }
+      return `${minutes}.${String(seconds).padStart(2, '0')}`;
+    }).join(';');
+    const escapedUrl = `"${errorItem.url.replaceAll('"', '""')}"`;
+    return `${escapedUrl},${timestamps}`;
+  }).join('\n') + '\n';
+}
+
+// 5-Sec Downloader - Extract all failed clips to CSV. The legacy IPC name is
+// retained so installed renderer bundles remain compatible during upgrades.
 ipcMain.handle('extract-rate-limit-errors', async (event) => {
   try {
-    if (rateLimitErrors.length === 0) {
-      return { success: false, error: 'No rate limit errors to extract' };
+    if (failedDownloadErrors.length === 0) {
+      return { success: false, error: 'No failed clips to extract' };
     }
 
     const { filePath } = await dialog.showSaveDialog(mainWindow, {
-      title: 'Save Rate Limit Errors CSV',
-      defaultPath: 'rate_limit_errors.csv',
+      title: 'Save Failed Clips CSV',
+      defaultPath: 'failed_downloads.csv',
       filters: [{ name: 'CSV Files', extensions: ['csv'] }],
     });
 
@@ -788,33 +820,12 @@ ipcMain.handle('extract-rate-limit-errors', async (event) => {
       return { success: false, error: 'Save dialog cancelled' };
     }
 
-    // Create CSV content in the same format as input
-    let csvContent = '';
-    for (const errorItem of rateLimitErrors) {
-      const url = errorItem.url;
-      const timestamps = errorItem.timestamps
-        .map(ts => {
-          // Convert seconds to mm.ss or hh.mm.ss format
-          const hours = Math.floor(ts / 3600);
-          const minutes = Math.floor((ts % 3600) / 60);
-          const seconds = Math.floor(ts % 60);
-          
-          if (hours > 0) {
-            return `${hours}.${String(minutes).padStart(2, '0')}.${String(seconds).padStart(2, '0')}`;
-          } else {
-            return `${minutes}.${String(seconds).padStart(2, '0')}`;
-          }
-        })
-        .join(';');
-      
-      csvContent += `${url},${timestamps}\n`;
-    }
-
+    const csvContent = formatDownloadErrorsCsv(failedDownloadErrors);
     fs.writeFileSync(filePath, csvContent, 'utf-8');
-    console.log(`💾 Rate limit errors saved to: ${filePath}`);
+    console.log(`💾 Failed clips saved to: ${filePath}`);
     return { success: true, filePath };
   } catch (error) {
-    console.error(`❌ Error extracting rate limit errors: ${error.message}`);
+    console.error(`❌ Error extracting failed clips: ${error.message}`);
     return { success: false, error: error.message };
   }
 });

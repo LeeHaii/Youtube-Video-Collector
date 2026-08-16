@@ -55,17 +55,25 @@ window.electronAPI.onDownloadLog?.((message) => {
 });
 
 // Setup download complete listener
-window.electronAPI.onDownloadComplete?.((success) => {
-  console.log('✅ [Download Complete]:', success);
+window.electronAPI.onDownloadComplete?.((completion) => {
+  console.log('✅ [Download Complete]:', completion);
   if (startBtn && stopBtn && downloaderLog) {
+    const result = typeof completion === 'boolean' ? { success: completion } : (completion || {});
+    const summary = result.summary || {};
     const timestamp = new Date().toLocaleTimeString();
-    if (success) {
+    if (result.success) {
       downloaderLog.textContent += `[${timestamp}] ✅ Download completed successfully!\n`;
+    } else if (result.partial) {
+      downloaderLog.textContent += `[${timestamp}] ⚠️ Download completed with ${summary.failedCount ?? 'some'} failed clip(s). Use “Extract Failed Clips” to retry only those clips.\n`;
+    } else if (result.canceled) {
+      downloaderLog.textContent += `[${timestamp}] ⏹️ Download stopped by user.\n`;
     } else {
-      downloaderLog.textContent += `[${timestamp}] ❌ Download failed!\n`;
+      const exitDetail = Number.isInteger(result.code) ? ` (exit code ${result.code})` : '';
+      downloaderLog.textContent += `[${timestamp}] ❌ Downloader failed${exitDetail}.\n`;
     }
     startBtn.disabled = false;
     stopBtn.disabled = true;
+    stopBtn.textContent = 'Stop';
   }
 });
 
@@ -74,13 +82,12 @@ window.electronAPI.onDownloadErrorSummary?.((summary) => {
   console.log('📊 [Download Error Summary]:', summary);
   
   if (errorExtractionContainer) {
-    // Show error extraction buttons if there are any errors
-    if (summary.rateLimitCount > 0 || summary.ageRestrictionCount > 0) {
+    // Every failure category is retryable from one exported CSV.
+    if (summary.failedCount > 0) {
       errorExtractionContainer.style.display = 'flex';
       
-      // Update button text with error counts
-      if (extractRateLimitBtn && summary.rateLimitCount > 0) {
-        extractRateLimitBtn.textContent = `Extract Rate Limit Errors (${summary.rateLimitCount})`;
+      if (extractRateLimitBtn) {
+        extractRateLimitBtn.textContent = `Extract Failed Clips (${summary.failedCount})`;
         extractRateLimitBtn.style.display = 'inline-block';
       }
       
@@ -88,7 +95,11 @@ window.electronAPI.onDownloadErrorSummary?.((summary) => {
       if (extractAgeRestrictionBtn && summary.ageRestrictionCount > 0) {
         extractAgeRestrictionBtn.textContent = `Extract Age Restriction Errors (${summary.ageRestrictionCount})`;
         extractAgeRestrictionBtn.style.display = 'inline-block';
+      } else if (extractAgeRestrictionBtn) {
+        extractAgeRestrictionBtn.style.display = 'none';
       }
+    } else {
+      errorExtractionContainer.style.display = 'none';
     }
   }
 });
@@ -205,8 +216,10 @@ startBtn.addEventListener('click', () => {
 
   logDownloader('🚀 Starting 5-Sec Download...');
   clearDownloaderLog();
+  if (errorExtractionContainer) errorExtractionContainer.style.display = 'none';
   startBtn.disabled = true;
   stopBtn.disabled = false;
+  stopBtn.textContent = 'Stop';
 
   // Call IPC to start download
   console.log('📤 Calling window.electronAPI.startDownload()');
@@ -230,20 +243,25 @@ startBtn.addEventListener('click', () => {
 // Stop Download
 stopBtn.addEventListener('click', () => {
   console.log('🔵 Stop Download button clicked');
-  logDownloader('⏹️ Stopping download...');
+  logDownloader('⏹️ Stop requested; waiting for the current clip to finish safely...');
+  startBtn.disabled = true;
+  stopBtn.disabled = true;
+  stopBtn.textContent = 'Stopping...';
   window.electronAPI.stopDownload()
     .then((result) => {
       console.log('✅ stopDownload IPC returned:', result);
       if (!result.success) {
         logDownloader(`❌ ${result.error}`);
+        startBtn.disabled = false;
+        stopBtn.textContent = 'Stop';
       }
     })
     .catch((err) => {
       console.error('❌ stopDownload IPC error:', err);
       logDownloader(`❌ Error stopping: ${err.message}`);
+      startBtn.disabled = false;
+      stopBtn.textContent = 'Stop';
     });
-  startBtn.disabled = false;
-  stopBtn.disabled = true;
 });
 
 // Open Output Folder
@@ -267,16 +285,16 @@ document.getElementById('open-output-btn').addEventListener('click', () => {
     });
 });
 
-// Extract Rate Limit Errors
+// Extract every failed clip, regardless of root cause
 extractRateLimitBtn.addEventListener('click', () => {
-  console.log('🔵 Extract Rate Limit Errors button clicked');
-  logDownloader('📊 Extracting rate limit errors to CSV...');
+  console.log('🔵 Extract Failed Clips button clicked');
+  logDownloader('📊 Extracting failed clips to CSV...');
   
   window.electronAPI.extractRateLimitErrors()
     .then((result) => {
       console.log('✅ extractRateLimitErrors IPC returned:', result);
       if (result.success) {
-        logDownloader(`✅ Rate limit errors saved to: ${result.filePath}`);
+        logDownloader(`✅ Failed clips saved to: ${result.filePath}`);
       } else {
         logDownloader(`❌ Error: ${result.error}`);
       }
