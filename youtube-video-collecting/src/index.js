@@ -11,6 +11,10 @@ const {
   createDownloadParseState,
   mergeErrorsForCsv,
 } = require('./downloader-summary');
+const {
+  processProjectShuffle,
+  processProjectEffectAndTitle,
+} = require('./capcut/draft-engine');
 
 // Suppress MaxListenersExceededWarning
 require('events').EventEmitter.defaultMaxListeners = 15;
@@ -135,7 +139,7 @@ const createWindow = () => {
     icon: path.join(__dirname, '../assets/chitoge.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: true,
+      nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
       webviewTag: true,
@@ -703,20 +707,17 @@ ipcMain.handle('scan-capcut-projects', async (event, folderPath) => {
 // CapCut - Process Projects
 ipcMain.handle('process-capcut-projects', async (event, projectPaths, cacheBust) => {
   try {
-    // Get the path to the compiled executable
-    const exePath = getExecutablePath('suffle_capcu_track');
-    
-    if (!fs.existsSync(exePath)) {
-      throw new Error(`Executable not found: ${exePath}. Please run "npm run build-exe" first.`);
-    }
-
-    console.log(`🎬 Starting CapCut Shuffle Executable`);
-    console.log(`📄 Executable: ${exePath}`);
+    console.log(`🎬 Starting CapCut Shuffle Engine`);
     console.log(`🎯 Projects to process: ${projectPaths.length}`);
     console.log(`🔄 Cache bust: ${cacheBust}`);
 
     let processedCount = 0;
     const failed = [];
+
+    const logToRenderer = (msg) => {
+      console.log(`[CapCut]: ${msg}`);
+      mainWindow.webContents.send('capcut-log', `${msg}\n`);
+    };
 
     for (let i = 0; i < projectPaths.length; i++) {
       const projectPath = projectPaths[i];
@@ -727,52 +728,15 @@ ipcMain.handle('process-capcut-projects', async (event, projectPaths, cacheBust)
         continue;
       }
 
-      console.log(`\n[${i + 1}/${projectPaths.length}] Processing: ${projectPath}`);
+      logToRenderer(`\n[${i + 1}/${projectPaths.length}] Processing: ${path.basename(projectPath)}`);
 
       try {
-        await new Promise((resolve, reject) => {
-          const python = spawn(exePath, [projectPath, cacheBust ? '1' : '0'], {
-            stdio: 'pipe',
-            shell: false,
-          });
-
-          let output = '';
-
-          // Handle errors
-          python.on('error', (error) => {
-            console.error(`❌ Failed to start CapCut process: ${error.message}`);
-            mainWindow.webContents.send('capcut-log', `❌ ERROR: Failed to start process: ${error.message}\n`);
-            reject(new Error(`Process failed to start: ${error.message}`));
-          });
-
-          python.stdout.on('data', (data) => {
-            const message = data.toString();
-            output += message;
-            console.log(`[CapCut stdout]: ${message}`);
-            mainWindow.webContents.send('capcut-log', message);
-          });
-
-          python.stderr.on('data', (data) => {
-            const message = data.toString();
-            output += message;
-            console.error(`[CapCut stderr]: ${message}`);
-            mainWindow.webContents.send('capcut-log', `ERROR: ${message}`);
-          });
-
-          python.on('close', (code) => {
-            console.log(`✅ CapCut process exited with code: ${code}`);
-            if (code === 0) {
-              resolve();
-            } else {
-              reject(new Error(`Process exited with code ${code}`));
-            }
-          });
-        });
-
-        processedCount++;
-        console.log(`✅ Successfully processed project ${i + 1}`);
+        const result = processProjectShuffle(projectPath, Boolean(cacheBust), logToRenderer);
+        processedCount += result.processedCount;
+        logToRenderer(`✅ Successfully processed project ${i + 1}`);
       } catch (err) {
         console.error(`❌ Error processing project: ${err.message}`);
+        logToRenderer(`❌ Error: ${err.message}`);
         failed.push(`${path.basename(projectPath)}: ${err.message}`);
       }
     }
@@ -787,7 +751,10 @@ ipcMain.handle('process-capcut-projects', async (event, projectPaths, cacheBust)
 // Open URL
 ipcMain.handle('open-url', async (event, url) => {
   try {
-    require('electron').shell.openExternal(url);
+    if (!url || !/^https?:\/\//i.test(url)) {
+      throw new Error('Invalid or unsupported URL scheme');
+    }
+    await require('electron').shell.openExternal(url);
     return { success: true };
   } catch (error) {
     throw new Error(`Error opening URL: ${error.message}`);
@@ -797,53 +764,17 @@ ipcMain.handle('open-url', async (event, url) => {
 // Auto Add Effect & Title - Process Projects
 ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, addTitle, titleText, logMarkersTime, skipIntro) => {
   try {
-    // Get paths to the compiled executables
-    const autoEffectExePath = getExecutablePath('auto_add_effect');
-    const autoTitleExePath = getExecutablePath('auto_add_title');
-    
-    if (addEffect && !fs.existsSync(autoEffectExePath)) {
-      throw new Error(`auto_add_effect.exe not found: ${autoEffectExePath}. Please run "npm run build-exe" first.`);
-    }
-
-    if (addTitle && !fs.existsSync(autoTitleExePath)) {
-      throw new Error(`auto_add_title.exe not found: ${autoTitleExePath}. Please run "npm run build-exe" first.`);
-    }
-
-    console.log(`🎨 Starting Auto Add Effect & Title`);
-    console.log(`📄 Auto Effect Executable: ${autoEffectExePath}`);
-    console.log(`📄 Auto Title Executable: ${autoTitleExePath}`);
+    console.log(`🎨 Starting Auto Add Effect & Title Engine`);
     console.log(`🎯 Projects to process: ${projectPaths.length}`);
     console.log(`✨ Add Effect: ${addEffect}, Add Title: ${addTitle}, Log Markers Time: ${logMarkersTime}, Skip Intro: ${skipIntro}`);
 
-    // Extract text lines from titleText if adding title
-    let extractedTexts = [];
-    if (addTitle && titleText.trim()) {
-      const keywords = ['Number', ':', 'Numéro', 'No.', '번호','Número','番号',];
-      const lines = titleText.split('\n');
-      
-      for (const line of lines) {
-        let keywordCount = 0;
-        for (const keyword of keywords) {
-          if (line.includes(keyword)) {
-            keywordCount++;
-          }
-        }
-        if (keywordCount >= 2) {
-          const trimmedLine = line.trim();
-          if (trimmedLine) {
-            extractedTexts.push(trimmedLine);
-          }
-        }
-      }
-
-      console.log(`📝 Extracted ${extractedTexts.length} text line(s) from input`);
-      if (extractedTexts.length === 0) {
-        throw new Error('No lines matching the criteria (must contain both "Number" and ":") were found in the input text.');
-      }
-    }
-
     let processedCount = 0;
     const failed = [];
+
+    const logToRenderer = (msg) => {
+      console.log(`[Effect & Title]: ${msg}`);
+      mainWindow.webContents.send('capcut-log', `${msg}\n`);
+    };
 
     for (let i = 0; i < projectPaths.length; i++) {
       const projectPath = projectPaths[i];
@@ -854,116 +785,22 @@ ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, ad
         continue;
       }
 
-      console.log(`\n[${i + 1}/${projectPaths.length}] Processing: ${projectPath}`);
+      logToRenderer(`\n[${i + 1}/${projectPaths.length}] Processing: ${path.basename(projectPath)}`);
 
       try {
-        // Process Auto Add Effect
-        if (addEffect) {
-          console.log(`  ✨ Running Auto Add Effect...`);
-          await new Promise((resolve, reject) => {
-            const effectArgs = [projectPath];
-            if (skipIntro) {
-              effectArgs.push('--skip-intro');
-            }
-            
-            const process = spawn(autoEffectExePath, effectArgs, {
-              stdio: 'pipe',
-              shell: false,
-            });
+        const result = processProjectEffectAndTitle(projectPath, {
+          addEffect: Boolean(addEffect),
+          addTitle: Boolean(addTitle),
+          titleText: titleText || '',
+          logMarkersTime: Boolean(logMarkersTime),
+          skipIntro: Boolean(skipIntro),
+        }, logToRenderer);
 
-            let output = '';
-
-            process.on('error', (error) => {
-              console.error(`❌ Failed to start auto_add_effect: ${error.message}`);
-              mainWindow.webContents.send('capcut-log', `❌ ERROR: Failed to start auto_add_effect: ${error.message}\n`);
-              reject(new Error(`Auto Add Effect failed to start: ${error.message}`));
-            });
-
-            process.stdout.on('data', (data) => {
-              const message = data.toString();
-              output += message;
-              console.log(`[auto_add_effect stdout]: ${message}`);
-              mainWindow.webContents.send('capcut-log', message);
-            });
-
-            process.stderr.on('data', (data) => {
-              const message = data.toString();
-              output += message;
-              console.error(`[auto_add_effect stderr]: ${message}`);
-              mainWindow.webContents.send('capcut-log', `ERROR: ${message}`);
-            });
-
-            process.on('close', (code) => {
-              console.log(`✅ auto_add_effect exited with code: ${code}`);
-              if (code === 0) {
-                resolve();
-              } else {
-                reject(new Error(`auto_add_effect exited with code ${code}`));
-              }
-            });
-          });
-        }
-
-        // Process Auto Add Title
-        if ((addTitle && extractedTexts.length > 0) || logMarkersTime) {
-          console.log(`  📝 Running Auto Add Title${addTitle && extractedTexts.length > 0 ? ` with ${extractedTexts.length} text line(s)` : ` (log markers only)`}...`);
-          // Pass the project path and extracted texts as command-line arguments
-          await new Promise((resolve, reject) => {
-            const textsJson = JSON.stringify(extractedTexts.length > 0 ? extractedTexts : []);
-            const args = [projectPath, textsJson];
-            
-            // Add log-markers-time flag if enabled
-            if (logMarkersTime) {
-              args.push('--log-markers-time');
-            }
-            
-            // Add skip-intro flag if enabled
-            if (skipIntro) {
-              args.push('--skip-intro');
-            }
-            
-            const process = spawn(autoTitleExePath, args, {
-              stdio: 'pipe',
-              shell: false,
-            });
-
-            let output = '';
-
-            process.on('error', (error) => {
-              console.error(`❌ Failed to start auto_add_title: ${error.message}`);
-              mainWindow.webContents.send('capcut-log', `❌ ERROR: Failed to start auto_add_title: ${error.message}\n`);
-              reject(new Error(`Auto Add Title failed to start: ${error.message}`));
-            });
-
-            process.stdout.on('data', (data) => {
-              const message = data.toString();
-              output += message;
-              console.log(`[auto_add_title stdout]: ${message}`);
-              mainWindow.webContents.send('capcut-log', message);
-            });
-
-            process.stderr.on('data', (data) => {
-              const message = data.toString();
-              output += message;
-              console.error(`[auto_add_title stderr]: ${message}`);
-              mainWindow.webContents.send('capcut-log', `ERROR: ${message}`);
-            });
-
-            process.on('close', (code) => {
-              console.log(`✅ auto_add_title exited with code: ${code}`);
-              if (code === 0) {
-                resolve();
-              } else {
-                reject(new Error(`auto_add_title exited with code ${code}`));
-              }
-            });
-          });
-        }
-
-        processedCount++;
-        console.log(`✅ Successfully processed project ${i + 1}`);
+        processedCount += result.processedCount;
+        logToRenderer(`✅ Successfully processed project ${i + 1}`);
       } catch (err) {
         console.error(`❌ Error processing project: ${err.message}`);
+        logToRenderer(`❌ Error: ${err.message}`);
         failed.push(`${path.basename(projectPath)}: ${err.message}`);
       }
     }
@@ -1143,12 +980,6 @@ ipcMain.handle('start-capcut-auto-render', async (event, selectedProjects, delay
     
     if (!fs.existsSync(exePath)) {
       const errorMsg = `Executable not found: ${exePath}. Please run "npm run build-exe" first.`;
-      mainWindow.webContents.send('capcut-render-log', `❌ ${errorMsg}`);
-      return { success: false, error: errorMsg };
-    }
-
-    if (!fs.existsSync(pyScriptPath)) {
-      const errorMsg = `Python script not found at ${pyScriptPath}`;
       mainWindow.webContents.send('capcut-render-log', `❌ ${errorMsg}`);
       return { success: false, error: errorMsg };
     }

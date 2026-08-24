@@ -2,6 +2,29 @@
 
 console.log('🔧 Tools Handler initializing...');
 
+function cleanLogMessage(message) {
+  return String(message)
+    .replace(/\p{Extended_Pictographic}\uFE0F?/gu, '')
+    .replace(/[✓✕✖]/g, '')
+    .replace(/^\s+/, '');
+}
+
+function setButtonLabel(button, label) {
+  const labelElement = button?.querySelector('.button-label');
+  if (labelElement) {
+    labelElement.textContent = label;
+  } else if (button) {
+    button.textContent = label;
+  }
+}
+
+function setConsoleState(logElement, label, state = 'idle') {
+  const status = logElement?.closest('.log-section')?.querySelector('.console-status');
+  if (!status) return;
+  status.textContent = label;
+  status.dataset.state = state;
+}
+
 // ============================================================================
 // QUERY ALL DOM ELEMENTS FIRST
 // ============================================================================
@@ -48,7 +71,7 @@ window.electronAPI.onDownloadLog?.((message) => {
   console.log('📥 [Download Log Received]:', message);
   if (downloaderLog) {
     const timestamp = new Date().toLocaleTimeString();
-    const line = `[${timestamp}] ${message.trim()}\n`;
+    const line = `[${timestamp}] ${cleanLogMessage(message).trim()}\n`;
     downloaderLog.textContent += line;
     downloaderLog.scrollTop = downloaderLog.scrollHeight;
   }
@@ -62,18 +85,22 @@ window.electronAPI.onDownloadComplete?.((completion) => {
     const summary = result.summary || {};
     const timestamp = new Date().toLocaleTimeString();
     if (result.success) {
-      downloaderLog.textContent += `[${timestamp}] ✅ Download completed successfully!\n`;
+      downloaderLog.textContent += `[${timestamp}] Download completed successfully.\n`;
+      setConsoleState(downloaderLog, 'Complete', 'success');
     } else if (result.partial) {
-      downloaderLog.textContent += `[${timestamp}] ⚠️ Download completed with ${summary.failedCount ?? 'some'} failed clip(s). Use “Extract Failed Clips” to retry only those clips.\n`;
+      downloaderLog.textContent += `[${timestamp}] Download completed with ${summary.failedCount ?? 'some'} failed clip(s). Use “Extract Failed Clips” to retry only those clips.\n`;
+      setConsoleState(downloaderLog, 'Needs attention', 'warning');
     } else if (result.canceled) {
-      downloaderLog.textContent += `[${timestamp}] ⏹️ Download stopped by user.\n`;
+      downloaderLog.textContent += `[${timestamp}] Download stopped by user.\n`;
+      setConsoleState(downloaderLog, 'Stopped', 'idle');
     } else {
       const exitDetail = Number.isInteger(result.code) ? ` (exit code ${result.code})` : '';
-      downloaderLog.textContent += `[${timestamp}] ❌ Downloader failed${exitDetail}.\n`;
+      downloaderLog.textContent += `[${timestamp}] Downloader failed${exitDetail}.\n`;
+      setConsoleState(downloaderLog, 'Failed', 'error');
     }
     startBtn.disabled = false;
     stopBtn.disabled = true;
-    stopBtn.textContent = 'Stop';
+    setButtonLabel(stopBtn, 'Stop');
   }
 });
 
@@ -87,13 +114,13 @@ window.electronAPI.onDownloadErrorSummary?.((summary) => {
       errorExtractionContainer.style.display = 'flex';
       
       if (extractRateLimitBtn) {
-        extractRateLimitBtn.textContent = `Extract Failed Clips (${summary.failedCount})`;
+        setButtonLabel(extractRateLimitBtn, `Extract failed clips (${summary.failedCount})`);
         extractRateLimitBtn.style.display = 'inline-block';
       }
       
       // Show age restriction button only if there are age restriction errors
       if (extractAgeRestrictionBtn && summary.ageRestrictionCount > 0) {
-        extractAgeRestrictionBtn.textContent = `Extract Age Restriction Errors (${summary.ageRestrictionCount})`;
+        setButtonLabel(extractAgeRestrictionBtn, `Extract age-restricted clips (${summary.ageRestrictionCount})`);
         extractAgeRestrictionBtn.style.display = 'inline-block';
       } else if (extractAgeRestrictionBtn) {
         extractAgeRestrictionBtn.style.display = 'none';
@@ -109,7 +136,7 @@ window.electronAPI.onCapcutLog?.((message) => {
   console.log('📥 [CapCut Log Received]:', message);
   if (capcutLog) {
     const timestamp = new Date().toLocaleTimeString();
-    const line = `[${timestamp}] ${message.trim()}\n`;
+    const line = `[${timestamp}] ${cleanLogMessage(message).trim()}\n`;
     capcutLog.textContent += line;
     capcutLog.scrollTop = capcutLog.scrollHeight;
   }
@@ -118,33 +145,62 @@ window.electronAPI.onCapcutLog?.((message) => {
 console.log('✅ All IPC event listeners registered');
 
 // ============================================================================
-// TAB SWITCHING
+// WORKSPACE NAVIGATION
 // ============================================================================
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const tabName = btn.getAttribute('data-tab');
-    switchTab(tabName);
+const tabButtons = Array.from(document.querySelectorAll('.tab-btn'));
+const tabPanels = Array.from(document.querySelectorAll('.tab-content'));
+
+tabButtons.forEach((button, index) => {
+  button.tabIndex = button.classList.contains('active') ? 0 : -1;
+
+  button.addEventListener('click', () => {
+    switchTab(button.dataset.tab);
+  });
+
+  button.addEventListener('keydown', (event) => {
+    const previousKeys = ['ArrowUp', 'ArrowLeft'];
+    const nextKeys = ['ArrowDown', 'ArrowRight'];
+    if (![...previousKeys, ...nextKeys, 'Home', 'End'].includes(event.key)) return;
+
+    event.preventDefault();
+    let nextIndex = index;
+    if (previousKeys.includes(event.key)) nextIndex = (index - 1 + tabButtons.length) % tabButtons.length;
+    if (nextKeys.includes(event.key)) nextIndex = (index + 1) % tabButtons.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = tabButtons.length - 1;
+
+    const nextButton = tabButtons[nextIndex];
+    switchTab(nextButton.dataset.tab);
+    nextButton.focus();
   });
 });
 
 function switchTab(tabName) {
-  // Hide all tabs
-  document.querySelectorAll('.tab-content').forEach(tab => {
-    tab.classList.remove('active');
+  const selectedPanel = document.getElementById(tabName);
+  const selectedButton = document.querySelector(`[data-tab="${tabName}"]`);
+  if (!selectedPanel || !selectedButton) return;
+
+  tabPanels.forEach((panel) => {
+    const isSelected = panel === selectedPanel;
+    panel.classList.toggle('active', isSelected);
+    panel.hidden = !isSelected;
   });
 
-  // Deactivate all buttons
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.classList.remove('active');
+  tabButtons.forEach((button) => {
+    const isSelected = button === selectedButton;
+    button.classList.toggle('active', isSelected);
+    button.setAttribute('aria-selected', String(isSelected));
+    button.tabIndex = isSelected ? 0 : -1;
   });
 
-  // Show selected tab
-  document.getElementById(tabName).classList.add('active');
+  if (window.location.hash !== `#${tabName}`) {
+    window.history.replaceState(null, '', `#${tabName}`);
+  }
+}
 
-  // Activate selected button
-  document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-
-  console.log(`📑 Switched to tab: ${tabName}`);
+const initialTab = window.location.hash.slice(1);
+if (initialTab && document.getElementById(initialTab)) {
+  switchTab(initialTab);
 }
 
 // ============================================================================
@@ -214,12 +270,13 @@ startBtn.addEventListener('click', () => {
     return;
   }
 
-  logDownloader('🚀 Starting 5-Sec Download...');
   clearDownloaderLog();
+  logDownloader('Starting five-second download...');
   if (errorExtractionContainer) errorExtractionContainer.style.display = 'none';
   startBtn.disabled = true;
   stopBtn.disabled = false;
-  stopBtn.textContent = 'Stop';
+  setButtonLabel(stopBtn, 'Stop');
+  setConsoleState(downloaderLog, 'Running', 'running');
 
   // Call IPC to start download
   console.log('📤 Calling window.electronAPI.startDownload()');
@@ -228,6 +285,7 @@ startBtn.addEventListener('click', () => {
       console.log('✅ startDownload IPC returned:', result);
       if (!result.success) {
         logDownloader(`❌ ${result.error}`);
+        setConsoleState(downloaderLog, 'Failed', 'error');
         startBtn.disabled = false;
         stopBtn.disabled = true;
       }
@@ -235,6 +293,7 @@ startBtn.addEventListener('click', () => {
     .catch((err) => {
       console.error('❌ startDownload IPC error:', err);
       logDownloader(`❌ Download failed: ${err.message}`);
+      setConsoleState(downloaderLog, 'Failed', 'error');
       startBtn.disabled = false;
       stopBtn.disabled = true;
     });
@@ -246,21 +305,24 @@ stopBtn.addEventListener('click', () => {
   logDownloader('⏹️ Stop requested; waiting for the current clip to finish safely...');
   startBtn.disabled = true;
   stopBtn.disabled = true;
-  stopBtn.textContent = 'Stopping...';
+  setButtonLabel(stopBtn, 'Stopping…');
+  setConsoleState(downloaderLog, 'Stopping', 'running');
   window.electronAPI.stopDownload()
     .then((result) => {
       console.log('✅ stopDownload IPC returned:', result);
       if (!result.success) {
         logDownloader(`❌ ${result.error}`);
+        setConsoleState(downloaderLog, 'Stop failed', 'error');
         startBtn.disabled = false;
-        stopBtn.textContent = 'Stop';
+        setButtonLabel(stopBtn, 'Stop');
       }
     })
     .catch((err) => {
       console.error('❌ stopDownload IPC error:', err);
       logDownloader(`❌ Error stopping: ${err.message}`);
+      setConsoleState(downloaderLog, 'Stop failed', 'error');
       startBtn.disabled = false;
-      stopBtn.textContent = 'Stop';
+      setButtonLabel(stopBtn, 'Stop');
     });
 });
 
@@ -327,7 +389,7 @@ extractAgeRestrictionBtn.addEventListener('click', () => {
 
 function logDownloader(message) {
   const timestamp = new Date().toLocaleTimeString();
-  const line = `[${timestamp}] ${message}\n`;
+  const line = `[${timestamp}] ${cleanLogMessage(message)}\n`;
   console.log(`📝 [Downloader Log]: ${message}`);
   downloaderLog.textContent += line;
   downloaderLog.scrollTop = downloaderLog.scrollHeight;
@@ -462,6 +524,7 @@ capcutProcessBtn.addEventListener('click', async () => {
 
   logCapcut(`🚀 Processing ${selectedNames.length} project(s)...`);
   capcutProcessBtn.disabled = true;
+  setConsoleState(capcutLog, 'Running', 'running');
 
   const cacheBust = capcutCacheBustCheckbox.checked;
   const projectPaths = selectedNames.map(name => allCapcutProjects[name]);
@@ -476,6 +539,7 @@ capcutProcessBtn.addEventListener('click', async () => {
 
     if (result.success) {
       logCapcut(`✅ Successfully processed ${result.processedCount} project(s)`);
+      setConsoleState(capcutLog, result.failed?.length ? 'Needs attention' : 'Complete', result.failed?.length ? 'warning' : 'success');
       if (result.failed && result.failed.length > 0) {
         logCapcut('⚠️ Failed projects:');
         result.failed.forEach(f => logCapcut(`  - ${f}`));
@@ -483,10 +547,12 @@ capcutProcessBtn.addEventListener('click', async () => {
     } else {
       console.error('❌ Processing failed:', result.error);
       logCapcut(`❌ Error: ${result.error}`);
+      setConsoleState(capcutLog, 'Failed', 'error');
     }
   } catch (err) {
     console.error('❌ processCapcutProjects IPC error:', err);
     logCapcut(`❌ Processing failed: ${err.message}`);
+    setConsoleState(capcutLog, 'Failed', 'error');
   }
 
   capcutProcessBtn.disabled = false;
@@ -498,7 +564,7 @@ capcutProcessBtn.addEventListener('click', async () => {
 
 function logCapcut(message) {
   const timestamp = new Date().toLocaleTimeString();
-  const line = `[${timestamp}] ${message}\n`;
+  const line = `[${timestamp}] ${cleanLogMessage(message)}\n`;
   console.log(`📝 [CapCut Log]: ${message}`);
   capcutLog.textContent += line;
   capcutLog.scrollTop = capcutLog.scrollHeight;
@@ -726,6 +792,7 @@ effectTitleProcessBtn.addEventListener('click', async () => {
 
   logEffectTitle(`🚀 Processing ${selectedNames.length} project(s)...`);
   effectTitleProcessBtn.disabled = true;
+  setConsoleState(effectTitleLog, 'Running', 'running');
 
   const projectPaths = selectedNames.map(name => allEffectTitleProjects[name]);
   const addEffect = effectTitleAddEffectCheckbox.checked;
@@ -749,6 +816,7 @@ effectTitleProcessBtn.addEventListener('click', async () => {
 
     if (result.success) {
       logEffectTitle(`✅ Successfully processed ${result.processedCount} project(s)`);
+      setConsoleState(effectTitleLog, result.failed?.length ? 'Needs attention' : 'Complete', result.failed?.length ? 'warning' : 'success');
       if (result.failed && result.failed.length > 0) {
         logEffectTitle('⚠️ Failed projects:');
         result.failed.forEach(f => logEffectTitle(`  - ${f}`));
@@ -756,10 +824,12 @@ effectTitleProcessBtn.addEventListener('click', async () => {
     } else {
       console.error('❌ Processing failed:', result.error);
       logEffectTitle(`❌ Error: ${result.error}`);
+      setConsoleState(effectTitleLog, 'Failed', 'error');
     }
   } catch (err) {
     console.error('❌ processEffectTitle IPC error:', err);
     logEffectTitle(`❌ Processing failed: ${err.message}`);
+    setConsoleState(effectTitleLog, 'Failed', 'error');
   }
 
   effectTitleProcessBtn.disabled = false;
@@ -771,7 +841,7 @@ effectTitleProcessBtn.addEventListener('click', async () => {
 
 function logEffectTitle(message) {
   const timestamp = new Date().toLocaleTimeString();
-  const line = `[${timestamp}] ${message}\n`;
+  const line = `[${timestamp}] ${cleanLogMessage(message)}\n`;
   console.log(`📝 [Effect & Title Log]: ${message}`);
   effectTitleLog.textContent += line;
   effectTitleLog.scrollTop = effectTitleLog.scrollHeight;

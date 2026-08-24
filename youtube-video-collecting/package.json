@@ -11,6 +11,7 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\"",
+    "test": "node --test tests/test_capcut_engine.js tests/test_downloader_summary.js tests/test_frozen_streaming.js",
     "build-exe": "node build-executables.js"
   },
   "keywords": [],

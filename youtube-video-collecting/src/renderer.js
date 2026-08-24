@@ -2,6 +2,20 @@
 
 console.log('📹 Renderer process starting...');
 
+function cleanUiLogMessage(message) {
+  return String(message)
+    .replace(/\p{Extended_Pictographic}\uFE0F?/gu, '')
+    .replace(/[✓✕✖]/g, '')
+    .replace(/^\s+/, '');
+}
+
+function setUiConsoleState(logElement, label, state = 'idle') {
+  const status = logElement?.closest('.log-section')?.querySelector('.console-status');
+  if (!status) return;
+  status.textContent = label;
+  status.dataset.state = state;
+}
+
 let markers = [];
 let currentRow = [];
 let rows = [];
@@ -37,6 +51,8 @@ const settingsSaveBtn = document.querySelector('#settings-save-btn');
 const settingsCancelBtn = document.querySelector('#settings-cancel-btn');
 const autosaveIntervalInput = document.querySelector('#autosave-interval-input');
 const markingMethodToggle = document.querySelector('#marking-method-toggle');
+const appContainer = document.querySelector('.app-container');
+let settingsReturnFocus = null;
 
 console.log('✅ DOM elements loaded');
 
@@ -74,6 +90,12 @@ if (creditFacebookLink) {
 // Close settings modal when clicking outside of it
 settingsModal.addEventListener('click', (e) => {
   if (e.target === settingsModal) {
+    closeSettings();
+  }
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && settingsModal.classList.contains('active')) {
     closeSettings();
   }
 });
@@ -248,7 +270,7 @@ function processMarker(videoData) {
   console.log('✅ Adding marker:', marker);
   addMarker(marker);
   lastMarkerTime = videoData.time;
-  showNotification(marker.formatted);
+  showNotification(marker.formatted, 'Marker added');
   createTimelineMarker(videoData.time, videoData.duration);
 }
 
@@ -313,34 +335,34 @@ function createTimelineMarker(currentTime, duration) {
   });
 }
 
-// Show notification
-function showNotification(text) {
-  console.log('Showing notification:', text);
+// Show an accessible, non-blocking notification.
+function showNotification(message, label = 'Update') {
+  console.log('Showing notification:', message);
   const notification = document.createElement('div');
-  notification.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background-color: rgba(0, 0, 0, 0.9);
-    color: #4fc3f7;
-    padding: 12px 20px;
-    border-radius: 6px;
-    font-size: 14px;
-    z-index: 10000;
-    pointer-events: none;
-    animation: slideIn 0.3s ease-out;
-    border: 2px solid #4fc3f7;
-    font-weight: bold;
-  `;
-  notification.textContent = `✓ Marker: ${text}`;
+  notification.className = 'app-toast-notification';
+  notification.setAttribute('role', 'status');
+  notification.setAttribute('aria-live', 'polite');
+
+  const icon = document.createElement('span');
+  icon.className = 'toast-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = '✓';
+
+  const text = document.createElement('span');
+  text.className = 'toast-message';
+  text.append(`${label}: `);
+  const strong = document.createElement('strong');
+  strong.textContent = message;
+  text.appendChild(strong);
+
+  notification.append(icon, text);
 
   document.body.appendChild(notification);
 
   setTimeout(() => {
-    notification.style.opacity = '0';
-    notification.style.animation = 'slideOut 0.3s ease-out';
+    notification.classList.add('toast-fadeout');
     setTimeout(() => notification.remove(), 300);
-  }, 2000);
+  }, 2200);
 }
 
 // Update URL display
@@ -376,9 +398,10 @@ function updateMarkersDisplay() {
   markers.forEach((marker, index) => {
     const item = document.createElement('div');
     item.className = 'marker-item';
+    item.setAttribute('role', 'listitem');
     item.innerHTML = `
-      <span class="marker-item-time">${formatMarkerTime(marker.time)}</span>
-      <span class="marker-item-remove" data-index="${index}">×</span>
+      <button type="button" class="marker-item-time" title="Jump to this marker">${formatMarkerTime(marker.time)}</button>
+      <button type="button" class="marker-item-remove" data-index="${index}" aria-label="Remove marker ${formatMarkerTime(marker.time)}">×</button>
     `;
 
     // Click to jump
@@ -562,7 +585,7 @@ function editExistingRow(rowIndex) {
   // Scroll to the control panel
   document.querySelector('.control-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   
-  showNotification(`📝 Editing row ${rowIndex + 1}. Add new URLs and timestamps, then save.`);
+  showNotification(`Row ${rowIndex + 1}. Add URLs and timestamps, then save.`, 'Edit mode');
 }
 
 // Parse time string (mm.ss or hh.mm.ss) to seconds
@@ -634,7 +657,7 @@ function saveRowChanges() {
   // Hide the save button
   saveRowBtn.style.display = 'none';
 
-  showNotification('✅ Changes saved successfully!');
+  showNotification('Changes saved successfully', 'Saved');
 }
 
 // Delete URL from a row with confirmation
@@ -670,13 +693,13 @@ function deleteUrlFromRow(rowIndex, urlIndex) {
   }
 
   updateRowsTable();
-  showNotification('✅ URL deleted successfully!');
+  showNotification('URL removed from the row', 'Removed');
 }
 
 // Update current row display
 function updateCurrentRowDisplay() {
   if (currentRow.length === 0) {
-    currentRowDisplay.innerHTML = '<span style="color: #999;">Empty</span>';
+    currentRowDisplay.innerHTML = '<span class="empty-inline">No videos in this row yet.</span>';
     currentRowTimestampCount.textContent = '0';
     return;
   }
@@ -698,6 +721,17 @@ function updateCurrentRowDisplay() {
 // Update rows table display
 function updateRowsTable() {
   rowsGrid.innerHTML = '';
+
+  if (rows.length === 0) {
+    const emptyRow = document.createElement('tr');
+    const emptyCell = document.createElement('td');
+    emptyCell.className = 'rows-empty-cell';
+    emptyCell.colSpan = 3;
+    emptyCell.innerHTML = '<strong>No collected rows yet</strong>Mark a video and add it to the current row to begin.';
+    emptyRow.appendChild(emptyCell);
+    rowsGrid.appendChild(emptyRow);
+  }
+
   rows.forEach((row, rowIndex) => {
     const tr = document.createElement('tr');
     
@@ -706,8 +740,10 @@ function updateRowsTable() {
     numCell.className = 'row-num';
     const rowBtn = document.createElement('button');
     rowBtn.className = 'row-num-button';
+    rowBtn.type = 'button';
     rowBtn.textContent = `${rowIndex + 1}`;
-    rowBtn.title = 'Click to edit this row';
+    rowBtn.title = 'Edit this row';
+    rowBtn.setAttribute('aria-label', `Edit row ${rowIndex + 1}`);
     rowBtn.addEventListener('click', () => editExistingRow(rowIndex));
     numCell.appendChild(rowBtn);
     tr.appendChild(numCell);
@@ -723,6 +759,7 @@ function updateRowsTable() {
       
       const urlButton = document.createElement('button');
       urlButton.className = 'url-cell-button';
+      urlButton.type = 'button';
       urlButton.textContent = url;
       urlButton.title = `Click to load: ${url}`;
       urlButton.addEventListener('click', () => {
@@ -732,8 +769,10 @@ function updateRowsTable() {
       
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'delete-url-btn';
+      deleteBtn.type = 'button';
       deleteBtn.textContent = '✕';
       deleteBtn.title = 'Delete this URL';
+      deleteBtn.setAttribute('aria-label', `Delete ${url} from row ${rowIndex + 1}`);
       deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         deleteUrlFromRow(rowIndex, i);
@@ -760,6 +799,11 @@ function updateRowsTable() {
   
   rowCountSpan.textContent = rows.length;
 }
+
+// Render useful empty states before the first interaction.
+updateMarkersDisplay();
+updateCurrentRowDisplay();
+updateRowsTable();
 
 // Export CSV
 async function exportCSV() {
@@ -855,9 +899,13 @@ async function loadRowData() {
  */
 function openSettings() {
   console.log('⚙️ Opening settings modal');
+  settingsReturnFocus = document.activeElement;
   autosaveIntervalInput.value = autosaveInterval;
   markingMethodToggle.checked = offsetMarkingEnabled;
   settingsModal.classList.add('active');
+  settingsModal.setAttribute('aria-hidden', 'false');
+  if (appContainer) appContainer.inert = true;
+  requestAnimationFrame(() => autosaveIntervalInput.focus());
 }
 
 /**
@@ -866,6 +914,11 @@ function openSettings() {
 function closeSettings() {
   console.log('⚙️ Closing settings modal');
   settingsModal.classList.remove('active');
+  settingsModal.setAttribute('aria-hidden', 'true');
+  if (appContainer) appContainer.inert = false;
+  if (settingsReturnFocus && typeof settingsReturnFocus.focus === 'function') {
+    settingsReturnFocus.focus();
+  }
 }
 
 /**
@@ -876,7 +929,7 @@ function saveSettings() {
   const newOffsetEnabled = markingMethodToggle.checked;
 
   if (isNaN(newInterval) || newInterval < 1 || newInterval > 60) {
-    alert('❌ Please enter a valid autosave interval between 1 and 60 minutes');
+    alert('Please enter an autosave interval between 1 and 60 minutes.');
     return;
   }
 
@@ -900,7 +953,7 @@ function saveSettings() {
   startAutosaveInterval();
 
   // Show confirmation
-  showNotification(`⚙️ Settings saved! Autosave: ${autosaveInterval}m | Offset marking: ${offsetMarkingEnabled ? 'ON' : 'OFF'}`);
+  showNotification(`Autosave ${autosaveInterval}m · offset marking ${offsetMarkingEnabled ? 'on' : 'off'}`, 'Settings saved');
   
   closeSettings();
 }
@@ -1158,7 +1211,7 @@ function initTrimmer() {
   function appendTrimmerLog(message) {
     if (!trimmerLog) return;
     const timestamp = new Date().toLocaleTimeString();
-    const line = `[${timestamp}] ${message}`;
+    const line = `[${timestamp}] ${cleanUiLogMessage(message)}`;
     trimmerLog.textContent += line + '\n';
     trimmerLog.scrollTop = trimmerLog.scrollHeight;
     console.log(`📝 [TRIMMER LOG]: ${message}`);
@@ -1350,12 +1403,14 @@ function initTrimmer() {
     if (!currentTrimmerUrl) {
       console.log('❌ No URL loaded');
       appendTrimmerLog('❌ [DOWNLOAD] No video URL loaded - click OK button first');
+      setUiConsoleState(trimmerLog, 'Needs input', 'warning');
       return;
     }
 
     if (!trimmerOutputPath.value) {
       console.log('❌ No output path selected');
       appendTrimmerLog('❌ [DOWNLOAD] No output folder selected - use Browse button');
+      setUiConsoleState(trimmerLog, 'Needs input', 'warning');
       return;
     }
 
@@ -1365,6 +1420,7 @@ function initTrimmer() {
     if (startSeconds >= endSeconds) {
       console.log('❌ Start time >= end time');
       appendTrimmerLog('❌ [DOWNLOAD] Start time must be before end time');
+      setUiConsoleState(trimmerLog, 'Check timing', 'warning');
       return;
     }
 
@@ -1384,6 +1440,7 @@ function initTrimmer() {
 
     try {
       trimmerDownloadBtn.disabled = true;
+      setUiConsoleState(trimmerLog, 'Running', 'running');
       console.log(`🚀 Starting trim: ${startDisplay} → ${endDisplay}`);
       appendTrimmerLog(`🚀 [DOWNLOAD] Starting trim: ${startDisplay} → ${endDisplay}`);
 
@@ -1416,14 +1473,17 @@ function initTrimmer() {
       if (result.success) {
         console.log('✅ Trim successful:', result.filePath);
         appendTrimmerLog(`✅ [DOWNLOAD] Success! Video saved: ${result.filePath}`);
+        setUiConsoleState(trimmerLog, 'Complete', 'success');
       } else {
         console.log('❌ Trim failed:', result.error);
         appendTrimmerLog(`❌ [DOWNLOAD] Error: ${result.error}`);
+        setUiConsoleState(trimmerLog, 'Failed', 'error');
       }
     } catch (err) {
       console.error('❌ [ERROR] Download error:', err);
       console.error('Error stack:', err.stack);
       appendTrimmerLog(`❌ [ERROR] ${err.message}`);
+      setUiConsoleState(trimmerLog, 'Failed', 'error');
     } finally {
       trimmerDownloadBtn.disabled = false;
     }
@@ -1518,13 +1578,21 @@ async function loadRenderProjects(folderPath) {
 // Update render projects list display
 function updateRenderProjectsList() {
   renderProjectsList.innerHTML = '';
-  renderProjects.forEach((project) => {
+  renderProjects.forEach((project, index) => {
     const item = document.createElement('div');
     item.className = 'project-item';
-    item.innerHTML = `
-      <input type="checkbox" class="project-checkbox" data-path="${project.draftFoldPath}" />
-      <label>${project.name}</label>
-    `;
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = `render-project-${index}`;
+    checkbox.className = 'project-checkbox';
+    checkbox.dataset.path = project.draftFoldPath;
+
+    const label = document.createElement('label');
+    label.htmlFor = checkbox.id;
+    label.textContent = project.name;
+
+    item.append(checkbox, label);
     renderProjectsList.appendChild(item);
   });
 }
@@ -1533,7 +1601,7 @@ function updateRenderProjectsList() {
 function appendRenderLog(message) {
   if (!renderLog) return;
   const timestamp = new Date().toLocaleTimeString();
-  const line = `[${timestamp}] ${message}`;
+  const line = `[${timestamp}] ${cleanUiLogMessage(message)}`;
   renderLog.textContent += line + '\n';
   renderLog.scrollTop = renderLog.scrollHeight;
   console.log(`📝 [RENDER LOG]: ${message}`);
@@ -1548,6 +1616,7 @@ renderStartBtn.addEventListener('click', async () => {
 
   if (selectedProjects.length === 0) {
     appendRenderLog('❌ Please select at least one project');
+    setUiConsoleState(renderLog, 'Needs input', 'warning');
     return;
   }
 
@@ -1568,18 +1637,22 @@ renderStartBtn.addEventListener('click', async () => {
 
   try {
     renderStartBtn.disabled = true;
+    setUiConsoleState(renderLog, 'Running', 'running');
     appendRenderLog(`🚀 Starting render for ${selectedProjects.length} projects...`);
     
     const result = await window.electronAPI.startCapcutAutoRender(selectedProjects, delays);
     
     if (result.success) {
       appendRenderLog(`✅ Rendering completed successfully!`);
+      setUiConsoleState(renderLog, 'Complete', 'success');
     } else {
       appendRenderLog(`❌ Error: ${result.error}`);
+      setUiConsoleState(renderLog, 'Failed', 'error');
     }
   } catch (err) {
     console.error('❌ Render error:', err);
     appendRenderLog(`❌ Error: ${err.message}`);
+    setUiConsoleState(renderLog, 'Failed', 'error');
   } finally {
     renderStartBtn.disabled = false;
   }

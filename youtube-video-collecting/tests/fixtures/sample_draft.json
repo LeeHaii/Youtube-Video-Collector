@@ -1,0 +1,100 @@
+{
+  "canvas_config": {
+    "height": 1080,
+    "ratio": "16:9",
+    "width": 1920
+  },
+  "materials": {
+    "texts": [
+      {
+        "content": "{\"text\":\"Sample Title Style\",\"styles\":[]}",
+        "id": "MAT_TEXT_TEMPLATE_1",
+        "type": "text"
+      }
+    ],
+    "video_effects": [
+      {
+        "id": "MAT_EFFECT_TEMPLATE_1",
+        "name": "Flash Shock",
+        "type": "video_effect"
+      },
+      {
+        "id": "MAT_EFFECT_TEMPLATE_2",
+        "name": "Shake Impact",
+        "type": "video_effect"
+      }
+    ],
+    "videos": [
+      {
+        "id": "MAT_VIDEO_1",
+        "material_name": "clip_1.mp4",
+        "path": "C:/videos/clip_1.mp4"
+      }
+    ]
+  },
+  "time_marks": {
+    "mark_items": [
+      { "title": "Marker 1", "time_range": { "duration": 0, "start": 0 } },
+      { "title": "Marker 2", "time_range": { "duration": 0, "start": 5000000 } },
+      { "title": "Marker 3", "time_range": { "duration": 0, "start": 10000000 } },
+      { "title": "Marker 4", "time_range": { "duration": 0, "start": 15000000 } },
+      { "title": "Marker 5", "time_range": { "duration": 0, "start": 20000000 } },
+      { "title": "Marker 6", "time_range": { "duration": 0, "start": 25000000 } }
+    ]
+  },
+  "tracks": [
+    {
+      "id": "TRACK_VIDEO_MAIN",
+      "type": "video",
+      "segments": [
+        {
+          "id": "SEG_V1",
+          "material_id": "MAT_VIDEO_1",
+          "target_timerange": { "start": 0, "duration": 2500000 }
+        },
+        {
+          "id": "SEG_V2",
+          "material_id": "MAT_VIDEO_1",
+          "target_timerange": { "start": 2500000, "duration": 2500000 }
+        },
+        {
+          "id": "SEG_V3",
+          "material_id": "MAT_VIDEO_1",
+          "target_timerange": { "start": 10000000, "duration": 2500000 }
+        },
+        {
+          "id": "SEG_V4",
+          "material_id": "MAT_VIDEO_1",
+          "target_timerange": { "start": 12500000, "duration": 2500000 }
+        }
+      ]
+    },
+    {
+      "id": "TRACK_EFFECT_TEMPLATE",
+      "type": "effect",
+      "segments": [
+        {
+          "id": "SEG_EFF_1",
+          "material_id": "MAT_EFFECT_TEMPLATE_1",
+          "target_timerange": { "start": 0, "duration": 1000000 }
+        },
+        {
+          "id": "SEG_EFF_2",
+          "material_id": "MAT_EFFECT_TEMPLATE_2",
+          "target_timerange": { "start": 1000000, "duration": 1000000 }
+        }
+      ]
+    },
+    {
+      "id": "TRACK_TEXT_TEMPLATE",
+      "type": "text",
+      "segments": [
+        {
+          "id": "SEG_TEXT_1",
+          "material_id": "MAT_TEXT_TEMPLATE_1",
+          "target_timerange": { "start": 0, "duration": 2000000 }
+        }
+      ]
+    }
+  ]
+}

@@ -1,216 +1,355 @@
 <!doctype html>
-<html>
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
-  <title>Rhymx's Youtube Ultimate Tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rhymx Media Studio</title>
   <link rel="stylesheet" href="index.css" />
+  <link rel="stylesheet" href="ui-system.css" />
 </head>
 
 <body>
+  <a class="skip-link" href="#youtube-tab">Skip to workspace</a>
+
+  <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="icon-collector" viewBox="0 0 24 24">
+      <path d="M15 10l4.6-2.3A1 1 0 0 1 21 8.6v6.8a1 1 0 0 1-1.4.9L15 14" />
+      <rect x="3" y="6" width="12" height="12" rx="2" />
+      <path d="M7 10h4M9 8v4" />
+    </symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24">
+      <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" />
+    </symbol>
+    <symbol id="icon-trim" viewBox="0 0 24 24">
+      <circle cx="6" cy="7" r="3" /><circle cx="6" cy="17" r="3" />
+      <path d="m8.7 8.3 10.3 5.2M8.7 15.7 19 10.5" />
+    </symbol>
+    <symbol id="icon-shuffle" viewBox="0 0 24 24">
+      <path d="M3 7h3c4 0 5 10 9 10h6m-3-3 3 3-3 3M3 17h3c1.5 0 2.6-1.4 3.7-3.1M14.3 9.9C15.4 8.4 16.5 7 18 7h3m-3-3 3 3-3 3" />
+    </symbol>
+    <symbol id="icon-wand" viewBox="0 0 24 24">
+      <path d="m15 4 5 5L8 21H3v-5L15 4Z" /><path d="m13 6 5 5M6 4V2m0 8v-2M2 6h2m4 0h2M18 16v-2m0 8v-2m-4-2h2m4 0h2" />
+    </symbol>
+    <symbol id="icon-render" viewBox="0 0 24 24">
+      <rect x="3" y="4" width="18" height="16" rx="2" /><path d="m10 9 5 3-5 3V9Z" />
+    </symbol>
+    <symbol id="icon-arrow-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></symbol>
+    <symbol id="icon-arrow-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M6.1 9a7 7 0 0 1 11.4-2.6L20 11M4 13l2.5 4.6A7 7 0 0 0 17.9 15" /></symbol>
+    <symbol id="icon-undo" viewBox="0 0 24 24"><path d="m9 14-4-4 4-4M5 10h8a6 6 0 0 1 6 6v2" /></symbol>
+    <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" /></symbol>
+    <symbol id="icon-folder" viewBox="0 0 24 24"><path d="M3 19V6a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v10H3Z" /></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></symbol>
+    <symbol id="icon-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z" /></symbol>
+    <symbol id="icon-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1" /></symbol>
+    <symbol id="icon-file-down" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6V3Z" /><path d="M14 3v5h5M12 11v6m0 0 3-3m-3 3-3-3" /></symbol>
+  </svg>
+
   <div class="app-container">
-    <!-- Tab Navigation -->
-    <div class="tab-navigation">
-      <button class="tab-btn active" data-tab="youtube-tab">YouTube Collector</button>
-      <button class="tab-btn" data-tab="downloader-tab">5-Sec Downloader</button>
-      <button class="tab-btn" data-tab="trimmer-tab">YouTube Trimmer</button>
-      <button class="tab-btn" data-tab="capcut-tab">CapCut Shuffle</button>
-      <button class="tab-btn" data-tab="capcut-effect-title-tab">Auto Add Effect & Title</button>
-      <button class="tab-btn" data-tab="capcut-render-tab">CapCut Auto Render</button>
-    </div>
+    <nav class="tab-navigation" aria-label="Primary workspace">
+      <div class="app-brand" aria-label="Rhymx Media Studio">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="brand-copy"><strong>Rhymx</strong><small>Media Studio</small></span>
+      </div>
+
+      <div class="nav-group" role="tablist" aria-label="Collection tools">
+        <span class="nav-group-label">Collect</span>
+        <button id="tab-button-youtube" class="tab-btn active" type="button" role="tab" aria-selected="true"
+          aria-controls="youtube-tab" data-tab="youtube-tab" title="Video Collector">
+          <svg class="ui-icon"><use href="#icon-collector"></use></svg>
+          <span class="tab-copy"><strong>Collector</strong><small>Capture timestamps</small></span>
+        </button>
+        <button id="tab-button-downloader" class="tab-btn" type="button" role="tab" aria-selected="false"
+          aria-controls="downloader-tab" data-tab="downloader-tab" title="Clip Downloader">
+          <svg class="ui-icon"><use href="#icon-download"></use></svg>
+          <span class="tab-copy"><strong>Downloader</strong><small>Build five-second clips</small></span>
+        </button>
+        <button id="tab-button-trimmer" class="tab-btn" type="button" role="tab" aria-selected="false"
+          aria-controls="trimmer-tab" data-tab="trimmer-tab" title="YouTube Trimmer">
+          <svg class="ui-icon"><use href="#icon-trim"></use></svg>
+          <span class="tab-copy"><strong>Trimmer</strong><small>Cut precise segments</small></span>
+        </button>
+      </div>
+
+      <div class="nav-group" role="tablist" aria-label="Production tools">
+        <span class="nav-group-label">Produce</span>
+        <button id="tab-button-capcut" class="tab-btn" type="button" role="tab" aria-selected="false"
+          aria-controls="capcut-tab" data-tab="capcut-tab" title="CapCut Shuffle">
+          <svg class="ui-icon"><use href="#icon-shuffle"></use></svg>
+          <span class="tab-copy"><strong>Shuffle</strong><small>Reorder project tracks</small></span>
+        </button>
+        <button id="tab-button-effects" class="tab-btn" type="button" role="tab" aria-selected="false"
+          aria-controls="capcut-effect-title-tab" data-tab="capcut-effect-title-tab" title="Effects and Titles">
+          <svg class="ui-icon"><use href="#icon-wand"></use></svg>
+          <span class="tab-copy"><strong>Effects &amp; titles</strong><small>Enrich CapCut drafts</small></span>
+        </button>
+        <button id="tab-button-render" class="tab-btn" type="button" role="tab" aria-selected="false"
+          aria-controls="capcut-render-tab" data-tab="capcut-render-tab" title="Auto Render">
+          <svg class="ui-icon"><use href="#icon-render"></use></svg>
+          <span class="tab-copy"><strong>Auto render</strong><small>Run export batches</small></span>
+        </button>
+      </div>
+
+      <div class="nav-footer">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span><strong>Local workspace</strong><small>Version 1.0</small></span>
+      </div>
+    </nav>
 
     <!-- Tab 1: YouTube Video Collector -->
-    <div id="youtube-tab" class="tab-content active">
-      <div class="app-container">
-        <!-- Top section: YouTube + Controls -->
-        <div class="top-section">
-          <!-- Left side: YouTube WebView -->
-          <div class="youtube-section">
-            <!-- Navigation Toolbar -->
-            <div class="youtube-toolbar">
-              <button id="yt-back-btn" class="yt-nav-btn" title="Go back">←</button>
-              <button id="yt-forward-btn" class="yt-nav-btn" title="Go forward">→</button>
-              <button id="yt-refresh-btn" class="yt-nav-btn" title="Refresh page">⟳</button>
-              <input type="text" id="yt-url-field" class="yt-url-input" readonly placeholder="Loading..." />
-            </div>
-            <!-- YouTube WebView -->
-            <webview id="youtube-webview" src="https://www.youtube.com"
-              sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation">
-            </webview>
+    <div id="youtube-tab" class="tab-content active" role="tabpanel" aria-labelledby="tab-button-youtube">
+      <!-- Top section: YouTube + Controls -->
+      <div class="top-section">
+        <!-- Left side: YouTube WebView -->
+        <div class="youtube-section">
+          <!-- Navigation Toolbar -->
+          <div class="youtube-toolbar">
+            <button id="yt-back-btn" class="yt-nav-btn" type="button" aria-label="Go back" title="Go back">
+              <svg class="ui-icon"><use href="#icon-arrow-left"></use></svg>
+            </button>
+            <button id="yt-forward-btn" class="yt-nav-btn" type="button" aria-label="Go forward" title="Go forward">
+              <svg class="ui-icon"><use href="#icon-arrow-right"></use></svg>
+            </button>
+            <button id="yt-refresh-btn" class="yt-nav-btn" type="button" aria-label="Refresh page" title="Refresh page">
+              <svg class="ui-icon"><use href="#icon-refresh"></use></svg>
+            </button>
+            <label class="sr-only" for="yt-url-field">Current browser URL</label>
+            <input type="text" id="yt-url-field" class="yt-url-input" readonly placeholder="Loading URL..." />
           </div>
+          <!-- YouTube WebView -->
+          <webview id="youtube-webview" src="https://www.youtube.com" aria-label="YouTube browser"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation">
+          </webview>
+        </div>
 
-          <!-- Right side: Controls and current row -->
-          <div class="right-panel">
-            <div class="control-panel">
-              <div class="panel-header">
-                <h2>Video Collector</h2>
+        <!-- Right side: Controls and current row -->
+        <div class="right-panel">
+          <div class="control-panel">
+            <div class="panel-header">
+              <div class="panel-heading">
+                <span class="eyebrow">Collection workspace</span>
+                <h2>Build a clip dataset</h2>
+                <p>Navigate, mark the useful moments, then commit them as a row.</p>
               </div>
+              <kbd>,</kbd>
+            </div>
 
-              <!-- Current URL Display -->
-              <div class="url-display">
-                <label>Current URL:</label>
-                <input type="text" id="current-url" readonly />
-              </div>
+            <!-- Current URL Display -->
+            <div class="url-display">
+              <label for="current-url">Active video URL</label>
+              <input type="text" id="current-url" readonly placeholder="Navigate to any YouTube video" />
+            </div>
 
-              <!-- Marker List (Scrollable) -->
-              <div class="markers-section">
-                <div class="section-header">
-                  <h3>Markers (Press , to add)</h3>
-                  <button id="undo-btn" class="small-btn" title="Undo last marker">↶</button>
+            <!-- Marker List (Scrollable) -->
+            <div class="markers-section">
+              <div class="section-header">
+                <div>
+                  <h3>Active markers</h3>
+                  <span class="section-caption">Press comma while the video plays</span>
                 </div>
-                <div id="markers-list" class="markers-list"></div>
+                <button id="undo-btn" class="small-btn" type="button" title="Undo last marker">
+                  <svg class="ui-icon"><use href="#icon-undo"></use></svg>Undo
+                </button>
               </div>
+              <div id="markers-list" class="markers-list" role="list" aria-live="polite"></div>
+            </div>
 
-              <!-- Button Group -->
-              <div class="button-group">
-                <button id="take-url-btn" class="action-btn">Take URL + Markers</button>
-                <button id="next-row-btn" class="action-btn">Next Row</button>
-                <button id="export-btn" class="action-btn primary">Export CSV</button>
-                <button id="save-row-btn" class="action-btn primary"
-                  style="display: none; background-color: #48bb78;">Save Changes</button>
-              </div>
+            <!-- Button Group -->
+            <div class="button-group">
+              <button id="take-url-btn" class="action-btn primary" type="button">Add video to row</button>
+              <button id="next-row-btn" class="action-btn">Next Row</button>
+              <button id="export-btn" class="action-btn export-action" type="button">
+                <svg class="ui-icon"><use href="#icon-file-down"></use></svg>Export CSV
+              </button>
+              <button id="save-row-btn" class="action-btn primary success-action" type="button"
+                style="display: none;">Save changes</button>
+            </div>
 
-              <!-- Current Row Display -->
-              <div class="current-row-section">
-                <div class="current-row-header">
-                  <h3>Current Row:</h3>
-                  <div class="row-header-buttons">
-                    <button id="clear-row-btn" class="small-btn" title="Clear current row">🗑️</button>
-                  </div>
+            <!-- Current Row Display -->
+            <div class="current-row-section">
+              <div class="current-row-header">
+                <h3>Current Row Queue</h3>
+                <div class="row-header-buttons">
+                  <button id="clear-row-btn" class="small-btn danger-quiet" type="button" title="Clear current row">
+                    <svg class="ui-icon"><use href="#icon-trash"></use></svg>Clear
+                  </button>
                 </div>
-                <div id="current-row-display" class="row-display"></div>
-                <div class="current-row-stats">
-                  <span>Total Timestamps: <strong id="current-row-timestamp-count">0</strong></span>
-                </div>
               </div>
+              <div id="current-row-display" class="row-display" aria-live="polite"></div>
+              <div class="current-row-stats">
+                <span>Timestamps in this row</span>
+                <strong id="current-row-timestamp-count">0</strong>
+              </div>
+            </div>
 
-              <!-- Status -->
-              <div class="status-section">
-                <p>Total Rows: <span id="row-count">0</span> | Markers: <span id="marker-count">0</span></p>
-              </div>
+            <!-- Status -->
+            <div class="status-section">
+              <p><span id="row-count">0</span> rows collected</p>
+              <p><span id="marker-count">0</span> active markers</p>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Bottom section: Rows Grid Table (Full Width, Scrollable) -->
-        <div class="rows-grid-section">
-          <div class="rows-grid-header">
-            <h3>Collected Rows:</h3>
-            <div class="row-header-buttons">
-              <button id="load-row-btn" class="small-btn" title="Load .rhymx or CSV file">📂 Load</button>
-              <button id="settings-btn" class="small-btn" title="Open settings">⚙️ Setting</button>
-            </div>
+      <!-- Bottom section: Rows Grid Table (Full Width, Scrollable) -->
+      <div class="rows-grid-section">
+        <div class="rows-grid-header">
+          <div>
+            <h3>Collected dataset</h3>
+            <p>Open a row number to edit it, or open a URL to return to that source.</p>
           </div>
-          <div id="rows-grid-container" class="rows-grid-container">
-            <table id="rows-grid" class="rows-grid">
-              <thead>
-                <tr>
-                  <th>Row</th>
-                  <th>URL / Timestamps</th>
-                  <th>TS Count</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
+          <div class="row-header-buttons">
+            <button id="load-row-btn" class="small-btn" type="button" title="Load .rhymx or CSV file">
+              <svg class="ui-icon"><use href="#icon-folder"></use></svg>Load file
+            </button>
+            <button id="settings-btn" class="small-btn" type="button" title="Open settings">
+              <svg class="ui-icon"><use href="#icon-settings"></use></svg>Settings
+            </button>
           </div>
+        </div>
+        <div id="rows-grid-container" class="rows-grid-container">
+          <table id="rows-grid" class="rows-grid">
+            <thead>
+              <tr>
+                <th style="width: 60px;">Row #</th>
+                <th>URL & Timestamp Slices</th>
+                <th style="width: 90px; text-align: right;">Total TS</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
         </div>
       </div>
     </div>
 
     <!-- Tab 2: 5-Sec Downloader -->
-    <div id="downloader-tab" class="tab-content">
+    <div id="downloader-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-button-downloader" hidden>
       <div class="tool-container">
-        <h1>5-Sec Downloader</h1>
+        <div class="tool-header-banner">
+          <div>
+            <span class="eyebrow">Download workspace</span>
+            <h1>Five-second clip downloader</h1>
+            <p>Turn a collected marker file into a structured batch of short source clips.</p>
+          </div>
+          <span class="header-badge">Batch tool</span>
+        </div>
 
         <!-- CSV Selector -->
         <div class="form-section">
-          <label class="form-label">Input CSV:</label>
+          <label class="form-label" for="csv-path">Marker CSV</label>
+          <p class="field-hint">Choose the exported dataset that contains source URLs and timestamps.</p>
           <div class="file-input-group">
-            <input type="text" id="csv-path" class="file-input" readonly placeholder="No file selected" />
-            <button id="csv-browse-btn" class="btn-secondary">Browse</button>
+            <input type="text" id="csv-path" class="file-input" readonly placeholder="Select marker CSV file..." />
+            <button id="csv-browse-btn" class="btn-secondary" type="button">
+              <svg class="ui-icon"><use href="#icon-folder"></use></svg>Choose file
+            </button>
           </div>
         </div>
 
         <!-- Output Folder Selector -->
         <div class="form-section">
-          <label class="form-label">Output Folder:</label>
+          <label class="form-label" for="output-path">Output folder</label>
           <div class="file-input-group">
-            <input type="text" id="output-path" class="file-input" readonly placeholder="No folder selected" />
-            <button id="output-browse-btn" class="btn-secondary">Browse</button>
+            <input type="text" id="output-path" class="file-input" readonly placeholder="Select output folder..." />
+            <button id="output-browse-btn" class="btn-secondary" type="button">
+              <svg class="ui-icon"><use href="#icon-folder"></use></svg>Choose folder
+            </button>
           </div>
         </div>
 
         <!-- Sleep Intervals Settings -->
         <div class="form-section">
-          <label class="form-label">Sleep Intervals (to avoid rate limiting):</label>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <span class="form-label">Rate-limit protection</span>
+          <p class="field-hint">Random delays reduce bursts. The downloader picks a value inside each range.</p>
+          <div class="delay-range-grid">
             <!-- Clip Sleep -->
-            <div>
-              <label style="font-size: 12px; color: #718096; display: block; margin-bottom: 4px;">Between Clips
-                (seconds)</label>
-              <div style="display: flex; gap: 6px; align-items: center;">
+            <div class="range-field">
+              <span class="range-label">Between clips <small>seconds</small></span>
+              <div class="range-inputs">
                 <input type="number" id="clip-sleep-min" class="form-input" value="1" min="0" step="0.5"
-                  style="flex: 1;" title="Minimum seconds between clips" />
-                <span style="color: #718096; font-size: 12px;">to</span>
+                  aria-label="Minimum seconds between clips" title="Minimum seconds between clips" />
+                <span aria-hidden="true">to</span>
                 <input type="number" id="clip-sleep-max" class="form-input" value="2" min="0" step="0.5"
-                  style="flex: 1;" title="Maximum seconds between clips" />
+                  aria-label="Maximum seconds between clips" title="Maximum seconds between clips" />
               </div>
             </div>
             <!-- Row Sleep -->
-            <div>
-              <label style="font-size: 12px; color: #718096; display: block; margin-bottom: 4px;">Between Rows
-                (seconds)</label>
-              <div style="display: flex; gap: 6px; align-items: center;">
+            <div class="range-field">
+              <span class="range-label">Between rows <small>seconds</small></span>
+              <div class="range-inputs">
                 <input type="number" id="row-sleep-min" class="form-input" value="10" min="0" step="0.5"
-                  style="flex: 1;" title="Minimum seconds between rows" />
-                <span style="color: #718096; font-size: 12px;">to</span>
+                  aria-label="Minimum seconds between rows" title="Minimum seconds between rows" />
+                <span aria-hidden="true">to</span>
                 <input type="number" id="row-sleep-max" class="form-input" value="15" min="0" step="0.5"
-                  style="flex: 1;" title="Maximum seconds between rows" />
+                  aria-label="Maximum seconds between rows" title="Maximum seconds between rows" />
               </div>
             </div>
           </div>
         </div>
 
         <!-- Control Buttons -->
-        <div class="form-section button-row">
-          <button id="downloader-start-btn" class="btn-primary">Start</button>
-          <button id="downloader-stop-btn" class="btn-danger" disabled>Stop</button>
-          <button id="open-output-btn" class="btn-secondary">Open Output</button>
+        <div class="form-section button-row run-actions">
+          <button id="downloader-start-btn" class="btn-primary" type="button">
+            <svg class="ui-icon"><use href="#icon-play"></use></svg>Start downloading
+          </button>
+          <button id="downloader-stop-btn" class="btn-danger" type="button" disabled>
+            <svg class="ui-icon"><use href="#icon-stop"></use></svg><span class="button-label">Stop</span>
+          </button>
+          <button id="open-output-btn" class="btn-secondary" type="button">
+            <svg class="ui-icon"><use href="#icon-folder"></use></svg>Open output
+          </button>
         </div>
 
-        <!-- Error Extraction Buttons (Hidden by Default) -->
+        <!-- Error Extraction Buttons -->
         <div class="form-section button-row" id="error-extraction-buttons" style="display: none; gap: 10px;">
           <button id="extract-rate-limit-btn" class="btn-secondary"
-            title="Extract every failed clip to CSV for retry">Extract Failed Clips</button>
+            title="Extract every failed clip to CSV for retry">
+            <svg class="ui-icon"><use href="#icon-file-down"></use></svg><span class="button-label">Extract failed clips</span>
+          </button>
           <button id="extract-age-restriction-btn" class="btn-secondary"
-            title="Extract age-restricted videos to CSV for retry" style="display: none;">Extract Age Restriction
-            Errors</button>
+            title="Extract age-restricted videos to CSV for retry" style="display: none;">
+            <svg class="ui-icon"><use href="#icon-file-down"></use></svg><span class="button-label">Extract age-restricted clips</span>
+          </button>
         </div>
 
         <!-- Log Area -->
         <div class="log-section">
-          <label class="form-label">Log:</label>
-          <div id="downloader-log" class="log-output"></div>
+          <div class="console-heading">
+            <div><span class="form-label">Activity console</span><p>Download progress and recovery details appear here.</p></div>
+            <span class="console-status">Ready</span>
+          </div>
+          <div id="downloader-log" class="log-output" role="log" aria-live="polite" aria-relevant="additions"></div>
         </div>
 
         <!-- Footer -->
         <div class="tool-footer">
           <span>© 2026 TranDucThang's 5-Sec Downloader</span>
-          <a href="#" id="fb-link-downloader">Facebook</a>
+          <a href="#" id="fb-link-downloader">Support & Feedback</a>
         </div>
       </div>
     </div>
 
     <!-- Tab 3: YouTube Trimmer -->
-    <div id="trimmer-tab" class="tab-content">
-      <div class="tool-container">
-        <h1>YouTube Trimmer</h1>
+    <div id="trimmer-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-button-trimmer" hidden>
+      <div class="tool-container" style="overflow: hidden;">
+        <div class="tool-header-banner">
+          <div>
+            <span class="eyebrow">Precision workspace</span>
+            <h1>YouTube segment trimmer</h1>
+            <p>Preview the source and define an exact start and end point before downloading.</p>
+          </div>
+          <span class="header-badge">Frame precise</span>
+        </div>
 
         <div class="trimmer-layout">
           <div class="trimmer-left">
-            <label class="form-label">Video Preview</label>
+            <div class="preview-heading">
+              <div><span class="form-label">Source preview</span><p>Use the embedded player to find the cut point.</p></div>
+              <span class="preview-status"><i></i>Live</span>
+            </div>
             <div class="trimmer-webview-container">
-              <webview id="trimmer-webview" src="https://www.youtube.com"
+              <webview id="trimmer-webview" src="https://www.youtube.com" aria-label="YouTube trimming preview"
                 sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation">
               </webview>
             </div>
@@ -218,70 +357,70 @@
 
           <div class="trimmer-right">
             <div class="form-section">
-              <label class="form-label">Output Folder:</label>
+              <label class="form-label" for="trimmer-output-path">Destination folder</label>
               <div class="file-input-group">
                 <input type="text" id="trimmer-output-path" class="file-input" readonly
-                  placeholder="No folder selected" />
-                <button id="trimmer-output-browse-btn" class="btn-secondary">Browse</button>
+                  placeholder="Select output folder..." />
+                <button id="trimmer-output-browse-btn" class="btn-secondary" type="button">
+                  <svg class="ui-icon"><use href="#icon-folder"></use></svg>Choose folder
+                </button>
               </div>
             </div>
 
             <div class="form-section">
-              <label class="form-label">YouTube URL:</label>
+              <label class="form-label" for="trimmer-url-input">Video URL</label>
               <div class="file-input-group">
-                <input type="text" id="trimmer-url-input" class="form-input" placeholder="Paste YouTube URL here..." />
-                <button id="trimmer-url-ok-btn" class="btn-secondary">OK</button>
+                <input type="text" id="trimmer-url-input" class="form-input" placeholder="Paste YouTube URL or navigate on the left..." />
+                <button id="trimmer-url-ok-btn" class="btn-secondary" type="button">Load video</button>
               </div>
             </div>
 
             <div class="form-section trimmer-controls-row">
               <div class="trimmer-timestamp-section">
-                <label class="form-label">Start Timestamp:</label>
+                <span class="form-label">Start timestamp</span>
                 <div class="timestamp-input-group">
                   <div class="timestamp-field">
-                    <label>HH</label>
+                    <label for="trimmer-start-hours">HH</label>
                     <input type="number" id="trimmer-start-hours" class="timestamp-input" min="0" max="23" value="0" />
                   </div>
                   <span class="timestamp-separator">:</span>
                   <div class="timestamp-field">
-                    <label>MM</label>
-                    <input type="number" id="trimmer-start-minutes" class="timestamp-input" min="0" max="59"
-                      value="0" />
+                    <label for="trimmer-start-minutes">MM</label>
+                    <input type="number" id="trimmer-start-minutes" class="timestamp-input" min="0" max="59" value="0" />
                   </div>
                   <span class="timestamp-separator">:</span>
                   <div class="timestamp-field">
-                    <label>SS</label>
-                    <input type="number" id="trimmer-start-seconds" class="timestamp-input" min="0" max="59"
-                      value="0" />
+                    <label for="trimmer-start-seconds">SS</label>
+                    <input type="number" id="trimmer-start-seconds" class="timestamp-input" min="0" max="59" value="0" />
                   </div>
                   <span class="timestamp-separator">.</span>
                   <div class="timestamp-field">
-                    <label>MS</label>
+                    <label for="trimmer-start-ms">MS</label>
                     <input type="number" id="trimmer-start-ms" class="timestamp-input" min="0" max="999" value="0" />
                   </div>
                 </div>
               </div>
 
               <div class="trimmer-timestamp-section">
-                <label class="form-label">End Timestamp:</label>
+                <span class="form-label">End timestamp</span>
                 <div class="timestamp-input-group">
                   <div class="timestamp-field">
-                    <label>HH</label>
+                    <label for="trimmer-end-hours">HH</label>
                     <input type="number" id="trimmer-end-hours" class="timestamp-input" min="0" max="23" value="0" />
                   </div>
                   <span class="timestamp-separator">:</span>
                   <div class="timestamp-field">
-                    <label>MM</label>
+                    <label for="trimmer-end-minutes">MM</label>
                     <input type="number" id="trimmer-end-minutes" class="timestamp-input" min="0" max="59" value="0" />
                   </div>
                   <span class="timestamp-separator">:</span>
                   <div class="timestamp-field">
-                    <label>SS</label>
+                    <label for="trimmer-end-seconds">SS</label>
                     <input type="number" id="trimmer-end-seconds" class="timestamp-input" min="0" max="59" value="0" />
                   </div>
                   <span class="timestamp-separator">.</span>
                   <div class="timestamp-field">
-                    <label>MS</label>
+                    <label for="trimmer-end-ms">MS</label>
                     <input type="number" id="trimmer-end-ms" class="timestamp-input" min="0" max="999" value="0" />
                   </div>
                 </div>
@@ -289,141 +428,267 @@
             </div>
 
             <div class="form-section">
-              <button id="trimmer-download-btn" class="btn-primary"
-                style="width: 100%; padding: 15px; font-size: 16px;">
-                Download Trimmed Video
+              <button id="trimmer-download-btn" class="btn-primary" style="width: 100%; padding: 12px;">
+                <svg class="ui-icon"><use href="#icon-download"></use></svg>Download trimmed clip
               </button>
             </div>
 
-            <div class="log-section trimmer-log-section">
-              <label class="form-label">Log:</label>
-              <div id="trimmer-log" class="log-output"></div>
+            <div class="log-section">
+              <div class="console-heading">
+                <div><span class="form-label">Trim console</span><p>Validation and download progress.</p></div>
+                <span class="console-status">Ready</span>
+              </div>
+              <div id="trimmer-log" class="log-output" role="log" aria-live="polite" aria-relevant="additions"></div>
             </div>
           </div>
         </div>
 
-        <!-- Footer -->
         <div class="tool-footer">
           <span>© 2026 TranDucThang's YouTube Trimmer</span>
-          <a href="#" id="fb-link-trimmer">Facebook</a>
+          <a href="#" id="fb-link-trimmer">Support & Feedback</a>
         </div>
       </div>
     </div>
 
     <!-- Tab 4: CapCut Shuffle Track -->
-    <div id="capcut-tab" class="tab-content">
+    <div id="capcut-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-button-capcut" hidden>
       <div class="tool-container">
-        <h1>CapCut Project Shuffler</h1>
+        <div class="tool-header-banner">
+          <div>
+            <span class="eyebrow">CapCut workflow</span>
+            <h1>Project track shuffler</h1>
+            <p>Select the drafts to randomize while keeping every source project recoverable.</p>
+          </div>
+          <span class="header-badge">Draft utility</span>
+        </div>
 
         <!-- Folder Selection -->
         <div class="form-section">
-          <label class="form-label" style="font-weight: bold;">CapCut Master Folder:</label>
+          <label class="form-label" for="capcut-folder-path">CapCut projects folder</label>
+          <p class="field-hint">Choose the folder that contains the drafts you want to process.</p>
           <div class="file-input-group">
-            <input type="text" id="capcut-folder-path" class="file-input" readonly placeholder="No folder selected" />
-            <button id="capcut-browse-btn" class="btn-secondary">Browse</button>
-            <button id="capcut-refresh-btn" class="btn-secondary">Refresh</button>
+            <input type="text" id="capcut-folder-path" class="file-input" readonly placeholder="Select CapCut projects folder..." />
+            <button id="capcut-browse-btn" class="btn-secondary" type="button">
+              <svg class="ui-icon"><use href="#icon-folder"></use></svg>Browse
+            </button>
+            <button id="capcut-refresh-btn" class="btn-secondary icon-action" type="button" aria-label="Refresh projects" title="Refresh projects">
+              <svg class="ui-icon"><use href="#icon-refresh"></use></svg>
+            </button>
           </div>
         </div>
 
         <!-- Search Section -->
         <div class="form-section">
-          <label class="form-label" style="font-weight: bold;">Search Projects:</label>
-          <input type="text" id="capcut-search-input" class="form-input" placeholder="Type to filter projects..." />
+          <label class="form-label" for="capcut-search-input">Filter projects</label>
+          <input type="text" id="capcut-search-input" class="form-input" placeholder="Type project name to filter..." />
         </div>
 
         <!-- Projects List -->
         <div class="form-section">
-          <label class="form-label" style="font-weight: bold;">Select Projects to Process:</label>
-          <div id="capcut-projects-list" class="projects-list"></div>
+          <span class="form-label">Projects to process</span>
+          <div id="capcut-projects-list" class="projects-list" aria-live="polite"></div>
         </div>
 
         <!-- Cache Bust Option -->
         <div class="form-section checkbox-section">
           <label class="checkbox-label">
-            <input type="checkbox" id="capcut-cache-bust" />
-            Force CapCut cache refresh (rename folder & update metadata)
+            <input type="checkbox" id="capcut-cache-bust" checked />
+            Force CapCut cache refresh (rename folder & inject fresh draft ID)
           </label>
         </div>
 
         <!-- Process Button -->
         <div class="form-section">
-          <button id="capcut-process-btn" class="btn-primary" style="width: 100%; padding: 15px; font-size: 16px;">
-            Process Selected Projects
+          <button id="capcut-process-btn" class="btn-primary" style="width: 100%; padding: 12px;">
+            <svg class="ui-icon"><use href="#icon-shuffle"></use></svg>Shuffle selected projects
           </button>
         </div>
 
         <!-- Log Area -->
         <div class="log-section">
-          <label class="form-label">Status:</label>
-          <div id="capcut-log" class="log-output"></div>
+          <div class="console-heading">
+            <div><span class="form-label">Execution console</span><p>Project scan and processing details.</p></div>
+            <span class="console-status">Ready</span>
+          </div>
+          <div id="capcut-log" class="log-output" role="log" aria-live="polite" aria-relevant="additions"></div>
         </div>
 
         <!-- Footer -->
         <div class="tool-footer">
           <span>© 2026 TranDucThang's Clip Shuffler</span>
-          <a href="#" id="fb-link-capcut">Facebook</a>
+          <a href="#" id="fb-link-capcut">Support & Feedback</a>
         </div>
       </div>
     </div>
 
-    <!-- Tab 5: CapCut Auto Render -->
-    <div id="capcut-render-tab" class="tab-content">
+    <!-- Tab 5: Auto Add Effect & Title -->
+    <div id="capcut-effect-title-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-button-effects" hidden>
       <div class="tool-container">
-        <h1>CapCut Auto Render (Deprecated)</h1>
+        <div class="tool-header-banner">
+          <div>
+            <span class="eyebrow">CapCut workflow</span>
+            <h1>Effects and title automation</h1>
+            <p>Apply synchronized effects and structured titles to selected drafts in one pass.</p>
+          </div>
+          <span class="header-badge">Draft utility</span>
+        </div>
+
+        <!-- Folder Selection -->
+        <div class="form-section">
+          <label class="form-label" for="effect-title-folder-path">CapCut projects folder</label>
+          <div class="file-input-group">
+            <input type="text" id="effect-title-folder-path" class="file-input" readonly placeholder="Select CapCut projects folder..." />
+            <button id="effect-title-browse-btn" class="btn-secondary" type="button">
+              <svg class="ui-icon"><use href="#icon-folder"></use></svg>Browse
+            </button>
+            <button id="effect-title-refresh-btn" class="btn-secondary icon-action" type="button" aria-label="Refresh projects" title="Refresh projects">
+              <svg class="ui-icon"><use href="#icon-refresh"></use></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Search Section -->
+        <div class="form-section">
+          <label class="form-label" for="effect-title-search-input">Filter projects</label>
+          <input type="text" id="effect-title-search-input" class="form-input" placeholder="Type project name to filter..." />
+        </div>
+
+        <!-- Projects List -->
+        <div class="form-section">
+          <span class="form-label">Projects to process</span>
+          <div id="effect-title-projects-list" class="projects-list" aria-live="polite"></div>
+        </div>
+
+        <!-- Auto Add Effect Checkbox -->
+        <div class="form-section checkbox-section" style="gap: 20px;">
+          <label class="checkbox-label">
+            <input type="checkbox" id="effect-title-add-effect" />
+            Auto add synchronized effects
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="effect-title-add-title" />
+            Auto add title subtitles
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="effect-title-log-markers-time" checked />
+            Log marker timings
+          </label>
+        </div>
+
+        <!-- Title Text Input -->
+        <div class="form-section" id="effect-title-text-section" style="display: none;">
+          <label class="form-label" for="effect-title-text-input">Title text</label>
+          <p class="field-hint">Use one numbered title per line, for example: “Number 1: Opening”.</p>
+          <textarea id="effect-title-text-input" class="form-input" placeholder="Paste numbered lines here..."
+            style="width: 100%; min-height: 100px; resize: vertical; font-family: var(--font-mono);">
+          </textarea>
+          <div style="margin-top: 8px;">
+            <label class="checkbox-label">
+              <input type="checkbox" id="effect-title-skip-intro" />
+              Skip Intro (Ignore initial introductory marker)
+            </label>
+          </div>
+        </div>
+
+        <!-- Extracted Text Display -->
+        <div class="form-section" id="effect-title-extracted-section" style="display: none;">
+          <span class="form-label">Validated insertion lines</span>
+          <div id="effect-title-extracted-output" class="log-output" style="max-height: 140px; color: #38bdf8;">
+          </div>
+        </div>
+
+        <!-- Process Button -->
+        <div class="form-section">
+          <button id="effect-title-process-btn" class="btn-primary" style="width: 100%; padding: 12px;">
+            <svg class="ui-icon"><use href="#icon-wand"></use></svg>Apply effects and titles
+          </button>
+        </div>
+
+        <!-- Log Area -->
+        <div class="log-section">
+          <div class="console-heading">
+            <div><span class="form-label">Execution console</span><p>Validation and injection progress.</p></div>
+            <span class="console-status">Ready</span>
+          </div>
+          <div id="effect-title-log" class="log-output" role="log" aria-live="polite" aria-relevant="additions"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="tool-footer">
+          <span>© 2026 TranDucThang's Auto Effect & Title</span>
+          <a href="#" id="fb-link-effect-title">Support & Feedback</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 6: CapCut Auto Render -->
+    <div id="capcut-render-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-button-render" hidden>
+      <div class="tool-container">
+        <div class="tool-header-banner">
+          <div>
+            <span class="eyebrow">Export workflow</span>
+            <h1>CapCut auto render</h1>
+            <p>Configure the legacy desktop automation timings and run a controlled render batch.</p>
+          </div>
+          <span class="header-badge warning-badge">Legacy automation</span>
+        </div>
 
         <!-- Projects Path Selector -->
         <div class="form-section">
-          <label class="form-label">Projects Folder:</label>
+          <label class="form-label" for="render-projects-path">Projects master folder</label>
           <div class="file-input-group">
-            <input type="text" id="render-projects-path" class="file-input" readonly placeholder="No folder selected" />
-            <button id="render-browse-btn" class="btn-secondary">Browse</button>
+            <input type="text" id="render-projects-path" class="file-input" readonly placeholder="Select projects folder..." />
+            <button id="render-browse-btn" class="btn-secondary" type="button">
+              <svg class="ui-icon"><use href="#icon-folder"></use></svg>Browse
+            </button>
           </div>
         </div>
 
         <!-- Projects List with Checkboxes -->
         <div class="form-section">
-          <label class="form-label">Select Projects to Render:</label>
-          <div id="render-projects-list" class="projects-list"></div>
+          <span class="form-label">Projects to render</span>
+          <div id="render-projects-list" class="projects-list" aria-live="polite"></div>
         </div>
 
         <!-- Delay Settings -->
         <div class="form-section">
-          <label class="form-label">Step Delays (seconds):</label>
+          <span class="form-label">Step timing</span>
+          <p class="field-hint">Allow enough time for CapCut to finish each action before the next one starts.</p>
           <div class="delays-grid">
             <div class="delay-field">
-              <label>Click CapCut & search:</label>
+              <label for="delay-1-2">Open CapCut and search</label>
               <input type="number" id="delay-1-2" class="delay-input" min="0" value="1" />
             </div>
             <div class="delay-field">
-              <label>Search for project:</label>
+              <label for="delay-3">Search for project</label>
               <input type="number" id="delay-3" class="delay-input" min="0" value="2" />
             </div>
             <div class="delay-field">
-              <label>Click project:</label>
+              <label for="delay-4">Open project</label>
               <input type="number" id="delay-4" class="delay-input" min="0" value="1" />
             </div>
             <div class="delay-field">
-              <label>Cancel link media:</label>
+              <label for="delay-5">Cancel link media</label>
               <input type="number" id="delay-5" class="delay-input" min="0" value="1" />
             </div>
             <div class="delay-field">
-              <label>Render (Ctrl+E):</label>
+              <label for="delay-6">Open render dialog</label>
               <input type="number" id="delay-6" class="delay-input" min="0" value="2" />
             </div>
             <div class="delay-field">
-              <label>Click export:</label>
+              <label for="delay-7">Start export</label>
               <input type="number" id="delay-7" class="delay-input" min="0" value="1" />
             </div>
             <div class="delay-field">
-              <label>Wait for share & cancel:</label>
+              <label for="delay-8">Wait for share and cancel</label>
               <input type="number" id="delay-8" class="delay-input" min="0" value="1200" />
             </div>
             <div class="delay-field">
-              <label>Menu & home:</label>
+              <label for="delay-9-10">Return to home</label>
               <input type="number" id="delay-9-10" class="delay-input" min="0" value="1" />
             </div>
             <div class="delay-field">
-              <label>Cancel search:</label>
+              <label for="delay-11">Clear search</label>
               <input type="number" id="delay-11" class="delay-input" min="0" value="1" />
             </div>
           </div>
@@ -431,172 +696,78 @@
 
         <!-- Start Button -->
         <div class="form-section">
-          <button id="render-start-btn" class="btn-primary" style="width: 100%; padding: 15px; font-size: 16px;">
-            Start Rendering Process
+          <button id="render-start-btn" class="btn-primary" style="width: 100%; padding: 12px;">
+            <svg class="ui-icon"><use href="#icon-play"></use></svg>Start render batch
           </button>
         </div>
 
         <!-- Log Area -->
         <div class="log-section">
-          <label class="form-label">Log:</label>
-          <div id="render-log" class="log-output"></div>
+          <div class="console-heading">
+            <div><span class="form-label">Render console</span><p>Automation steps and failures appear here.</p></div>
+            <span class="console-status">Ready</span>
+          </div>
+          <div id="render-log" class="log-output" role="log" aria-live="polite" aria-relevant="additions"></div>
         </div>
 
         <!-- Footer -->
         <div class="tool-footer">
           <span>© 2026 TranDucThang's CapCut Auto Render</span>
-          <a href="#" id="fb-link-render">Facebook</a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tab 6: Auto Add Effect & Title -->
-    <div id="capcut-effect-title-tab" class="tab-content">
-      <div class="tool-container">
-        <h1>Auto Add Effect & Title</h1>
-
-        <!-- Folder Selection -->
-        <div class="form-section">
-          <label class="form-label" style="font-weight: bold;">CapCut Master Folder:</label>
-          <div class="file-input-group">
-            <input type="text" id="effect-title-folder-path" class="file-input" readonly
-              placeholder="No folder selected" />
-            <button id="effect-title-browse-btn" class="btn-secondary">Browse</button>
-            <button id="effect-title-refresh-btn" class="btn-secondary">Refresh</button>
-          </div>
-        </div>
-
-        <!-- Search Section -->
-        <div class="form-section">
-          <label class="form-label" style="font-weight: bold;">Search Projects:</label>
-          <input type="text" id="effect-title-search-input" class="form-input"
-            placeholder="Type to filter projects..." />
-        </div>
-
-        <!-- Projects List -->
-        <div class="form-section">
-          <label class="form-label" style="font-weight: bold;">Select Projects to Process:</label>
-          <div id="effect-title-projects-list" class="projects-list"></div>
-        </div>
-
-        <!-- Auto Add Effect Checkbox -->
-        <div class="form-section checkbox-section">
-          <label class="checkbox-label">
-            <input type="checkbox" id="effect-title-add-effect" />
-            Auto Add Effect
-          </label>
-        </div>
-
-        <!-- Auto Add Title Checkbox & Fields -->
-        <div class="form-section checkbox-section">
-          <label class="checkbox-label">
-            <input type="checkbox" id="effect-title-add-title" />
-            Auto Add Title
-          </label>
-        </div>
-
-        <!-- Log Markers Time Checkbox (Checked by Default) -->
-        <div class="form-section checkbox-section">
-          <label class="checkbox-label">
-            <input type="checkbox" id="effect-title-log-markers-time" checked />
-            Log Markers Time
-          </label>
-        </div>
-
-        <!-- Title Text Input (Hidden by Default) -->
-        <div class="form-section" id="effect-title-text-section" style="display: none;">
-          <label class="form-label" style="font-weight: bold;">Input Text:</label>
-          <textarea id="effect-title-text-input" class="form-input" placeholder="Paste your text here..."
-            style="width: 100%; box-sizing: border-box; min-height: 120px; resize: none; font-family: monospace;">
-          </textarea>
-          <label class="checkbox-label">
-            <input type="checkbox" id="effect-title-skip-intro" />
-            Skip Intro<!-- Skiping the first marker -->
-          </label>
-        </div>
-
-        <!-- Extracted Text Display (Hidden by Default) -->
-        <div class="form-section" id="effect-title-extracted-section" style="display: none;">
-          <label class="form-label" style="font-weight: bold;">Extracted Text:</label>
-          <div id="effect-title-extracted-output" class="log-output"
-            style="max-height: 200px; overflow-y: auto; color:black; background-color: #ffffff; border: 1px solid #cbd5e0; border-radius: 4px; padding: 10px; font-family: monospace; white-space: pre-wrap; word-wrap: break-word;">
-          </div>
-        </div>
-
-        <!-- Process Button -->
-        <div class="form-section">
-          <button id="effect-title-process-btn" class="btn-primary"
-            style="width: 100%; padding: 15px; font-size: 16px;">
-            Process Selected Projects
-          </button>
-        </div>
-
-        <!-- Log Area -->
-        <div class="log-section">
-          <label class="form-label">Status:</label>
-          <div id="effect-title-log" class="log-output"></div>
-        </div>
-
-        <!-- Footer -->
-        <div class="tool-footer">
-          <span>© 2026 TranDucThang's Auto Effect & Title</span>
-          <a href="#" id="fb-link-effect-title">Facebook</a>
+          <a href="#" id="fb-link-render">Support & Feedback</a>
         </div>
       </div>
     </div>
   </div>
 
   <!-- Settings Modal -->
-  <div id="settings-modal" class="settings-modal">
+  <div id="settings-modal" class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-hidden="true">
     <div class="settings-modal-content">
       <div class="settings-modal-header">
-        <h2>Settings</h2>
-        <button id="settings-close-btn" class="settings-close-btn">✕</button>
+        <div><span class="eyebrow">Workspace preferences</span><h2 id="settings-title">Collector settings</h2></div>
+        <button id="settings-close-btn" class="settings-close-btn" type="button" aria-label="Close settings">&times;</button>
       </div>
 
       <div class="settings-modal-body">
         <!-- Autosave Interval Setting -->
         <div class="settings-section">
-          <label class="settings-label">Auto-save Interval (minutes):</label>
+          <label class="settings-label" for="autosave-interval-input">Autosave interval</label>
           <div class="settings-input-group">
             <input type="number" id="autosave-interval-input" class="settings-input" min="1" max="60" value="1" />
-            <span class="settings-hint">How often to auto-save your data</span>
+            <span class="settings-hint">Minutes between timestamped collection backups.</span>
           </div>
         </div>
 
         <!-- Marking Method Setting -->
         <div class="settings-section">
           <div class="settings-checkbox-group">
-            <input type="checkbox" id="marking-method-toggle" class="settings-checkbox" />
-            <label for="marking-method-toggle" class="settings-checkbox-label">
-              <strong>Offset Marking Method</strong>
-              <span class="settings-hint">When enabled, takes timestamp 5 seconds before pressing the marking key</span>
+            <label class="checkbox-label" for="marking-method-toggle">
+              <input type="checkbox" id="marking-method-toggle" />
+              <strong>Offset Marking Mode (5-Second Reaction Buffer)</strong>
             </label>
           </div>
           <div class="marking-method-info">
             <div class="info-box">
-              <strong>Disabled:</strong> Takes exact timestamp when you press the marking key
+              <strong>Off:</strong> Captures exact timestamp at moment of key press.
             </div>
             <div class="info-box">
-              <strong>Enabled:</strong> Takes timestamp 5 seconds before you press the key (e.g., press at 8:40, marker
-              set to 8:35)
+              <strong>On:</strong> Retroactively marks timestamp 5 seconds prior (e.g. at 2:30 -> logs 2:25) to capture clip lead-ins.
             </div>
           </div>
         </div>
 
         <!-- Credit Section -->
-        <div class="settings-credit-section">
-          <div class="credit-content">
-            <h3>Rhymx's Youtube Ultimate Tool</h3>
-            <p>Made with ❤️ by TranDucThang</p>
-            <a href="#" id="credit-facebook-link" class="credit-link">Follow on Facebook</a>
+          <div class="settings-credit-section">
+            <div class="credit-content">
+            <h3>Rhymx Media Studio</h3>
+            <p>Production Studio Edition by TranDucThang</p>
+            <a href="#" id="credit-facebook-link" class="credit-link">Follow developer updates on Facebook</a>
           </div>
         </div>
       </div>
 
       <div class="settings-modal-footer">
-        <button id="settings-save-btn" class="settings-btn-primary">Save Settings</button>
-        <button id="settings-cancel-btn" class="settings-btn-secondary">Cancel</button>
+        <button id="settings-cancel-btn" class="settings-btn-secondary" type="button">Cancel</button>
+        <button id="settings-save-btn" class="settings-btn-primary" type="button">Save settings</button>
       </div>
     </div>
   </div>
