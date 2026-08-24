@@ -62,12 +62,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 });
 
-// ============================================================================
-// LICENSING API - Exposed to activation window and main app
-// ============================================================================
-contextBridge.exposeInMainWorld('licensingAPI', {
-  submitLicenseKey: (key) => ipcRenderer.invoke('submit-license-key', key),
-  checkLicenseStatus: () => ipcRenderer.invoke('check-license-status'),
-});
 
 
