@@ -55,7 +55,7 @@ npm run build-exe
 ```
 
 This will:
-1. ✅ Compile all 6 Python scripts into standalone executables
+1. ✅ Compile all 7 Python scripts into standalone executables
 2. ✅ Place them in the `dist/` directory
 3. ✅ Bundle all dependencies, including the pinned yt-dlp and yt-dlp-ejs solver
 
@@ -66,9 +66,15 @@ dist/
 ├── auto_add_effect.exe
 ├── auto_add_title.exe
 ├── capcut_auto_render.exe
+├── collector_native_host.exe
 ├── suffle_capcu_track.exe
 └── youtube_trimmer.exe
 ```
+
+To rebuild only the browser bridge, run `node build-executables.js --collector-only`.
+The native helper must retain console-mode binary stdin/stdout for Chrome's
+native messaging protocol; do not compile it with `--windowed`. See
+[Collector Links setup](extension/README.md) for the Windows/Chrome pilot.
 
 ### Troubleshooting PyInstaller
 

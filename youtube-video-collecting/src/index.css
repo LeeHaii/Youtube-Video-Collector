@@ -1514,3 +1514,15 @@ webview#trimmer-webview {
 .credit-link:active {
   transform: scale(0.98);
 }
+/* Browser link delivery status belongs to the player toolbar. */
+#collector-link-status {
+  padding: 8px 12px;
+  font-size: 13px;
+  background: #e9f4ee;
+  color: #22523b;
+  overflow-wrap: anywhere;
+}
+#collector-link-status[data-error="true"] {
+  background: #fff0f0;
+  color: #962b35;
+}

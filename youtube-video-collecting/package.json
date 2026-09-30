@@ -1,7 +1,7 @@
 {
   "name": "rhymx-youtube-ultimate-tool",
   "productName": "Rhymx's Youtube Ultimate Tool",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Ultimate tool for collecting YouTube video, downloading videos, and Capcut automation",
   "main": "src/index.js",
   "private": true,

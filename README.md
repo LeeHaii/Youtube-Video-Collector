@@ -29,6 +29,9 @@ Watch YouTube inside the application and quickly collect important timestamps.
 * Automatic `.rhymx` session backups
 * Configurable autosave interval
 * Optional **5-second offset marking**
+* Open timestamped Google Sheets links directly in the collector with the Windows/Chrome pilot extension
+
+See [Collector Links setup](youtube-video-collecting/extension/README.md) for extension installation and connection checks.
 
 ---
 

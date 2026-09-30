@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Collector links</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header><img src="icons/48.png" width="28" height="28" alt=""><h1>Collector links</h1></header>
+  <label class="setting"><span>Open from Sheets</span><input id="enabled" type="checkbox" role="switch" checked></label>
+  <section class="connection">
+    <span id="connection" role="status" aria-live="polite">Not checked</span>
+    <button id="check" title="Check connection" aria-label="Check connection">&#8635;</button>
+  </section>
+  <p id="last" aria-live="polite">No links opened yet</p>
+  <script src="popup.js"></script>
+</body>
+</html>

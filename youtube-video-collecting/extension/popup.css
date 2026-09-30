@@ -1,0 +1,17 @@
+* { box-sizing: border-box; }
+body { width: 320px; margin: 0; padding: 16px; background: #ffffff; color: #252a30; font: 13px/1.5 system-ui, sans-serif; }
+header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+h1 { margin: 0; font-size: 18px; font-weight: 650; }
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #e4e7e9; }
+input { appearance: none; width: 36px; height: 20px; flex: 0 0 36px; border-radius: 10px; background: #c8cdd1; position: relative; cursor: pointer; }
+input::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
+input:checked { background: #237f61; }
+input:checked::after { transform: translateX(16px); }
+input:focus-visible, button:focus-visible { outline: 2px solid #237f61; outline-offset: 3px; }
+.connection { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; }
+#connection { overflow-wrap: anywhere; }
+#connection[data-error="true"] { color: #b32635; }
+button { width: 32px; height: 32px; flex: 0 0 32px; border: 1px solid #d5dade; border-radius: 5px; background: #f7f9fa; color: #252a30; font-size: 22px; cursor: pointer; }
+button:hover { background: #e9f4ee; }
+button:disabled { opacity: .5; cursor: wait; }
+#last { margin: 12px 0 0; font-size: 12px; color: #5c666f; overflow-wrap: anywhere; }

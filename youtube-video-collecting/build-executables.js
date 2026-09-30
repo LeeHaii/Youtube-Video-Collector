@@ -20,6 +20,7 @@ const SCRIPTS = [
   'capcut_auto_render.py',
   'suffle_capcu_track.py',
   'youtube_trimmer.py',
+  'collector_native_host.py',
 ];
 
 const YT_DLP_SCRIPTS = new Set([
@@ -35,7 +36,8 @@ if (!fs.existsSync(DIST_DIR)) {
 
 console.log('🔨 Starting PyInstaller compilation...\n');
 
-for (const script of SCRIPTS) {
+const scriptsToBuild = process.argv.includes('--collector-only') ? ['collector_native_host.py'] : SCRIPTS;
+for (const script of scriptsToBuild) {
   const scriptPath = path.join(TOOLS_DIR, script);
   const scriptName = path.basename(script, '.py');
   

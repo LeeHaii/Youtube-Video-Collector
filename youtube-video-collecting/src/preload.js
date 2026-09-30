@@ -35,8 +35,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // YouTube Collector - Load/Save
   openLoadDialog: () => ipcRenderer.invoke('open-load-dialog'),
   loadRowData: (filePath) => ipcRenderer.invoke('load-row-data', filePath),
-  saveRowAutosave: (rows, currentRow) => ipcRenderer.invoke('save-row-autosave', rows, currentRow),
+  saveRowAutosave: (rows, currentRow, session) => ipcRenderer.invoke('save-row-autosave', rows, currentRow, session),
   getAutosavePath: () => ipcRenderer.invoke('get-autosave-path'),
+  collectorReady: () => ipcRenderer.send('collector-ready'),
+  collectorOpenResult: (requestId, result) => ipcRenderer.send('collector-open-result', requestId, result),
+  onCollectorOpen: (callback) => {
+    const listener = (event, request) => callback(request);
+    ipcRenderer.on('collector-open-video', listener);
+    return () => ipcRenderer.removeListener('collector-open-video', listener);
+  },
 
   // Utility APIs
   openUrl: (url) => ipcRenderer.invoke('open-url', url),
