@@ -540,6 +540,16 @@ Input CSV
 Output Folder
 ```
 
+Choose **Maximum video height**: Auto (the existing download behavior), 360p,
+480p, 720p, 1080p, 1440p, or 2160p (4K). Explicit choices use the largest available
+height within the limit. Selecting 4K for a video that tops out at 1080p downloads
+1080p; selecting 720p for a 480p source downloads 480p without upscaling.
+
+Portrait videos are limited by pixel height too. If none of the delivery profiles
+offers a known video height within an explicit limit, that clip is reported as a
+format failure and can be exported for retry. The choice stays fixed until the
+current run finishes or stops.
+
 Configure optional delays:
 
 ```text

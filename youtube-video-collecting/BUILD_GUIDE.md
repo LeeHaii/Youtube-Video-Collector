@@ -99,6 +99,28 @@ dist/5_sec_downloader.exe --help
 
 # Or run it with arguments
 dist/5_sec_downloader.exe input.csv output_folder 3 5 2 5
+
+# Download at the largest available height up to 4K (1080p sources stay 1080p)
+dist/5_sec_downloader.exe input.csv output_folder --resolution 2160
+```
+
+The resolution flag defaults to `auto`, preserving the previous behavior. Allowed
+explicit values are `360`, `480`, `720`, `1080`, `1440`, and `2160`. Existing
+positional arguments, including the stop flag path after the four sleep values,
+retain their order. Rebuild the downloader executable whenever its Python source
+changes, and package the rebuilt executable with the matching UI.
+
+To rebuild just this tool from the project directory:
+
+```bash
+python -m PyInstaller --noconfirm --clean --onefile --collect-all yt_dlp_ejs --distpath dist --specpath dist --workpath dist/build tools/5_sec_downloader.py
+```
+
+Run downloader regression tests with the pinned Python dependencies installed:
+
+```bash
+python tests/test_5_sec_downloader.py
+node --test tests/test_downloader_options.js tests/test_downloader_summary.js tests/test_frozen_streaming.js
 ```
 
 ---

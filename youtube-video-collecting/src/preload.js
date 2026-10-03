@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 5-Sec Downloader APIs
   openFileDialog: (options) => ipcRenderer.invoke('open-file-dialog', options),
   openFolderDialog: () => ipcRenderer.invoke('open-folder-dialog'),
-  startDownload: (csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax) => ipcRenderer.invoke('start-download', csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax),
+  startDownload: (csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, resolution = 'auto') => ipcRenderer.invoke('start-download', csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, resolution),
   stopDownload: () => ipcRenderer.invoke('stop-download'),
   extractRateLimitErrors: () => ipcRenderer.invoke('extract-rate-limit-errors'),
   extractAgeRestrictionErrors: () => ipcRenderer.invoke('extract-age-restriction-errors'),

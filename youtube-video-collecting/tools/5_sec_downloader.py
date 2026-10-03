@@ -1,3 +1,4 @@
+import argparse
 import copy
 import csv
 import hashlib
@@ -11,7 +12,7 @@ import subprocess
 import sys
 import time
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from importlib import metadata
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -80,6 +81,7 @@ RETRYABLE_ERRORS = {
 }
 
 DEFAULT_FORMAT = "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
+SUPPORTED_HEIGHTS = (360, 480, 720, 1080, 1440, 2160)
 
 
 @dataclass(frozen=True)
@@ -87,6 +89,7 @@ class DownloadProfile:
     name: str
     player_clients: Tuple[str, ...] = ()
     format_selector: str = DEFAULT_FORMAT
+    max_height: Optional[int] = None
 
 
 DOWNLOAD_PROFILES = (
@@ -96,6 +99,21 @@ DOWNLOAD_PROFILES = (
     # Last-resort token-free path for videos that allow embedded playback.
     DownloadProfile("embedded", ("web_embedded",)),
 )
+
+
+def profiles_for_resolution(max_height: Optional[int] = None) -> Tuple[DownloadProfile, ...]:
+    if max_height is None:
+        return DOWNLOAD_PROFILES
+    if type(max_height) is not int or max_height not in SUPPORTED_HEIGHTS:
+        raise ValueError(f"Unsupported maximum video height: {max_height}")
+    selector = (
+        f"bestvideo*[height<={max_height}]+bestaudio/"
+        f"best[height<={max_height}]"
+    )
+    return tuple(
+        replace(profile, format_selector=selector, max_height=max_height)
+        for profile in DOWNLOAD_PROFILES
+    )
 
 
 @dataclass
@@ -510,6 +528,10 @@ def build_ydl_options(
         options["extractor_args"] = {
             "youtube": {"player_client": list(profile.player_clients)}
         }
+    if profile.max_height is not None:
+        # Prefer the largest qualifying height, even when extractor quality ranks differ.
+        options["format_sort"] = ["height", "+hasaud"]
+        options["format_sort_force"] = True
     return options
 
 
@@ -526,6 +548,7 @@ class VideoDownloadSession:
     ):
         self.url = url
         self.profile = profile
+        self.log_callback = log_callback
         self.logger = DownloaderLogger(log_callback)
         self.options = build_ydl_options(
             "unused.%(ext)s",
@@ -553,6 +576,9 @@ class VideoDownloadSession:
         ]
         if self.info is None:
             self.info = self.ydl.extract_info(self.url, download=False)
+            width, height = self.info.get("width"), self.info.get("height")
+            if width and height:
+                self.log_callback(f"      Selected source: {width}x{height} ({self.profile.name})\n")
         self.ydl.process_ie_result(copy.deepcopy(self.info), download=True)
 
     def diagnostics(self) -> str:
@@ -624,6 +650,8 @@ def download_clip(
     stop_flag_path: Optional[str] = None,
     session_factory=VideoDownloadSession,
     sleep_func: Callable[[float], None] = time.sleep,
+    *,
+    profiles: Tuple[DownloadProfile, ...] = DOWNLOAD_PROFILES,
 ) -> ClipOutcome:
     start = int(start_time)
     end = int(start_time + duration)
@@ -632,7 +660,7 @@ def download_clip(
     attempts_used = 0
 
     profiles = sorted(
-        DOWNLOAD_PROFILES[:MAX_CLIP_ATTEMPTS],
+        profiles[:MAX_CLIP_ATTEMPTS],
         key=lambda profile: profile.name not in session_cache,
     )
     for attempt, profile in enumerate(profiles, start=1):
@@ -727,7 +755,10 @@ def process_clips(
     stop_flag_path: Optional[str] = None,
     download_clip_func=download_clip,
     sleep_func: Callable[[float], None] = time.sleep,
+    *,
+    max_height: Optional[int] = None,
 ) -> ProcessingSummary:
+    profiles = profiles_for_resolution(max_height)
     rows = parse_input_csv(csv_path)
     non_empty_rows = [(index, pairs) for index, pairs in enumerate(rows) if pairs]
     total_clips = sum(len(timestamps) for _, pairs in non_empty_rows for _, timestamps in pairs)
@@ -782,6 +813,7 @@ def process_clips(
                         stop_event=stop_event,
                         stop_flag_path=stop_flag_path,
                         sleep_func=sleep_func,
+                        **({"profiles": profiles} if max_height is not None else {}),
                     )
 
                     if outcome.status == "CANCELED":
@@ -831,21 +863,38 @@ def process_clips(
     return summary
 
 
-def main() -> None:
-    if len(sys.argv) < 3:
-        print(
-            "Usage: 5_sec_downloader <csv_path> <output_path> "
-            "[clip_sleep_min] [clip_sleep_max] [row_sleep_min] [row_sleep_max] [stop_flag_path]"
-        )
-        sys.exit(EXIT_FATAL)
+class DownloaderArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        self.print_usage(sys.stderr)
+        self.exit(EXIT_FATAL, f"ERROR: {message}\n")
 
-    csv_path = sys.argv[1]
-    output_path = sys.argv[2]
-    clip_sleep_min = float(sys.argv[3]) if len(sys.argv) > 3 else 1.0
-    clip_sleep_max = float(sys.argv[4]) if len(sys.argv) > 4 else 2.0
-    row_sleep_min = float(sys.argv[5]) if len(sys.argv) > 5 else 10.0
-    row_sleep_max = float(sys.argv[6]) if len(sys.argv) > 6 else 15.0
-    stop_flag_path = sys.argv[7] if len(sys.argv) > 7 else None
+
+def parse_arguments(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = DownloaderArgumentParser(description="Download five-second clips from a CSV.")
+    parser.add_argument("csv_path")
+    parser.add_argument("output_path")
+    for name, default in (
+        ("clip_sleep_min", 1.0), ("clip_sleep_max", 2.0),
+        ("row_sleep_min", 10.0), ("row_sleep_max", 15.0),
+    ):
+        parser.add_argument(name, type=float, nargs="?", default=default)
+    parser.add_argument("stop_flag_path", nargs="?", default=None)
+    parser.add_argument(
+        "--resolution", default="auto",
+        choices=["auto", *(str(height) for height in SUPPORTED_HEIGHTS)],
+        help="Maximum source-video height; lower resolutions are allowed. Auto retains the legacy policy.",
+    )
+    args = parser.parse_args(argv)
+    args.max_height = None if args.resolution == "auto" else int(args.resolution)
+    return args
+
+
+def main() -> None:
+    args = parse_arguments()
+    csv_path, output_path = args.csv_path, args.output_path
+    clip_sleep_min, clip_sleep_max = args.clip_sleep_min, args.clip_sleep_max
+    row_sleep_min, row_sleep_max = args.row_sleep_min, args.row_sleep_max
+    stop_flag_path = args.stop_flag_path
 
     if not Path(csv_path).is_file():
         print(f"ERROR: Input CSV file not found: {csv_path}")
@@ -871,6 +920,7 @@ def main() -> None:
         print("🚀 Starting 5-Sec Download...")
         print(f"   CSV: {csv_path}")
         print(f"   Output: {output_path}")
+        print(f"   Maximum video height: {args.max_height or 'Auto (current behavior)'}")
         print(f"   yt-dlp: {YT_DLP_VERSION}")
         print(f"   FFmpeg: {ffmpeg_executable}")
         print(f"   EJS solver: {ejs_version() or 'not bundled (remote fallback enabled)'}")
@@ -896,6 +946,7 @@ def main() -> None:
             row_sleep_max,
             log_callback=print,
             stop_flag_path=stop_flag_path,
+            max_height=args.max_height,
         )
         exit_code = summary.exit_code()
         if exit_code == EXIT_SUCCESS:

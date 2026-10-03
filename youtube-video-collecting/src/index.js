@@ -7,6 +7,7 @@ const { ElectronBlocker } = require('@cliqz/adblocker-electron');
 const fetch = require('node-fetch');
 const { CollectorBridge } = require('./collector-bridge');
 const { registerNativeHost, unregisterNativeHost } = require('./native-host-registration');
+const { validateDownloadResolution, buildDownloadArguments } = require('./downloader-options');
 const {
   buildDownloadErrorSummary,
   consumeDownloaderStdout,
@@ -485,11 +486,13 @@ ipcMain.handle('get-autosave-path', async (event) => {
 });
 
 // 5-Sec Downloader - Start Download
-ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax) => {
+ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, resolution = 'auto') => {
   try {
     if (downloadProcess && downloadProcess.exitCode === null) {
       return { success: false, error: 'A download is already running or stopping. Please wait for it to finish.' };
     }
+
+    const selectedResolution = validateDownloadResolution(resolution);
 
     // Reset error tracking
     rateLimitErrors = [];
@@ -519,6 +522,7 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
     console.log(`📁 Output: ${outputPath}`);
     console.log(`⏱️  Clip Sleep: ${clipSleepMin}-${clipSleepMax}s`);
     console.log(`⏱️  Row Sleep: ${rowSleepMin}-${rowSleepMax}s`);
+    console.log(`📐 Maximum video height: ${selectedResolution}`);
 
     // Create a unique stop flag file path for graceful shutdown
     const stopFlagPath = path.join(os.tmpdir(), `downloader-stop-flag-${Date.now()}.txt`);
@@ -526,7 +530,9 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
     console.log(`⚠️  Stop flag path: ${stopFlagPath}`);
 
     // Spawn executable process WITHOUT shell to properly handle spaces in paths
-    const childProcess = spawn(exePath, [csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, stopFlagPath], {
+    const childProcess = spawn(exePath, buildDownloadArguments(
+      csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, stopFlagPath, selectedResolution,
+    ), {
       stdio: 'pipe',
       shell: false,
       // The packaged Python process writes to pipes, which are otherwise block-buffered.
