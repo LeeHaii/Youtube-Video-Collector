@@ -5,6 +5,8 @@ module.exports = {
   packagerConfig: {
     asar: true,
     icon: 'assets/chitoge.ico',
+    // Executables are already copied as resources; do not duplicate them in ASAR.
+    ignore: [/^\/dist(?:\/|$)/, /^\/out(?:\/|$)/],
     extraResource: [
       './dist',
     ],

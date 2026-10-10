@@ -140,6 +140,23 @@
           </div>
         </div>
 
+        <div class="form-section">
+          <label class="form-label" for="downloader-resolution">Maximum video height:</label>
+          <select id="downloader-resolution" class="form-input" aria-describedby="downloader-resolution-hint">
+            <option value="auto" selected>Auto (current behavior)</option>
+            <option value="360">360p</option>
+            <option value="480">480p</option>
+            <option value="720">720p</option>
+            <option value="1080">1080p (Full HD)</option>
+            <option value="1440">1440p (2K)</option>
+            <option value="2160">2160p (4K)</option>
+          </select>
+          <p id="downloader-resolution-hint" style="font-size: 12px; color: #718096; margin: 6px 0 0;">
+            Uses the best available quality up to this height, without upscaling. Portrait videos are also limited by pixel height.
+            MP4 output uses 8-bit H.264 SDR and preserves the source frame rate. Some Windows players may not support 4K at 60 fps.
+          </p>
+        </div>
+
         <!-- Sleep Intervals Settings -->
         <div class="form-section">
           <label class="form-label">Sleep Intervals (to avoid rate limiting):</label>
@@ -601,6 +618,9 @@
     </div>
   </div>
 
+  <script src="../extension/collector-link.js"></script>
+  <script src="collector-session.js"></script>
+  <script src="collector-navigation.js"></script>
   <script src="renderer.js"></script>
   <script src="tools-handler.js"></script>
 </body>

@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Rhymx Collector Links",
+  "version": "1.0.0",
+  "description": "Open YouTube links from Google Sheets in the Rhymx collector.",
+  "minimum_chrome_version": "110",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0kWtrFDWPKWpMEThxC0JeJoLMs0h6xAiQ161djKbxOGIJpgNzt9YinuaK9Ae2HZrApuYHNDYkIhEqBWHhc05gwIzqfW7YNq1LK2vmcuzLm9jic41mW0BMu2Z5SXk9pwWEQMDRtVYtuVpV8lwOVnsX9qCMXeRCFp8Z6lb85IL4QS6oVqoRlV48Y1uobmuxpNmDk9GUhoyBGBDl4iqX7RIK3n7gRkpzR3BJPVJWdfdTbmf6lUaskASrqsVP+zAL0jKWOi/l7Jv0kVSaPC+iKy7DLMnf6+n1ZQ+NOgH5OwG2/m6gYLDYn75kjPTlq1TDTql9SztUUtMI97FWo8TVwpRywIDAQAB",
+  "permissions": ["nativeMessaging", "webNavigation", "storage"],
+  "host_permissions": [
+    "https://docs.google.com/*",
+    "https://www.youtube.com/*",
+    "https://youtube.com/*",
+    "https://m.youtube.com/*",
+    "https://youtu.be/*",
+    "https://www.youtu.be/*",
+    "https://www.google.com/*",
+    "https://google.com/*"
+  ],
+  "background": { "service_worker": "service-worker.js" },
+  "action": { "default_popup": "popup.html", "default_title": "Collector links" },
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+}

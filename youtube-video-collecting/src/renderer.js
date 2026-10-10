@@ -12,6 +12,11 @@ let loadedUrlIndex = -1; // Track which URL in the row is being edited (-1 = ent
 let autosaveInterval = 1;
 let offsetMarkingEnabled = false; // Toggle for offset marking method (5 seconds before)
 let autosaveIntervalId = null; // Store the interval ID for dynamic updates
+const collectorDrafts = CollectorSession.createDraftStore();
+let pendingExternalVideo = null;
+let markerCaptureAfter = 0;
+let externalSwitching = false;
+let externalOpenQueue = Promise.resolve();
 
 // DOM Elements
 const youtubeWebview = document.querySelector('#youtube-webview');
@@ -29,6 +34,72 @@ const markerCountSpan = document.querySelector('#marker-count');
 const rowsGrid = document.querySelector('#rows-grid tbody');
 const loadRowBtn = document.querySelector('#load-row-btn');
 const saveRowBtn = document.querySelector('#save-row-btn');
+const collectorLinkStatus = document.createElement('div');
+collectorLinkStatus.id = 'collector-link-status';
+collectorLinkStatus.setAttribute('role', 'status');
+collectorLinkStatus.setAttribute('aria-live', 'polite');
+collectorLinkStatus.hidden = true;
+document.querySelector('.youtube-toolbar').after(collectorLinkStatus);
+
+function rememberCollectorDraft(url = currentUrl) {
+  collectorDrafts.save(url, { markers, currentRow, loadedRowIndex, loadedUrlIndex }, rows);
+}
+
+function activateCollectorDraft(url) {
+  const wasEditing = loadedRowIndex >= 0;
+  const draft = collectorDrafts.restore(url, rows);
+  markers = draft?.markers || [];
+  loadedRowIndex = draft?.loadedRowIndex ?? -1;
+  loadedUrlIndex = draft?.loadedUrlIndex ?? -1;
+  if (loadedRowIndex >= 0) currentRow = Array.isArray(draft.currentRow) ? draft.currentRow : [];
+  else if (wasEditing) currentRow = [];
+  lastMarkerTime = -1;
+  lastProcessedMarkerTime = -1;
+  markerCaptureAfter = Date.now();
+  takeUrlBtn.disabled = loadedRowIndex >= 0 && loadedUrlIndex >= 0;
+  saveRowBtn.style.display = loadedRowIndex >= 0 ? 'inline-block' : 'none';
+  updateMarkersDisplay();
+  updateCurrentRowDisplay();
+}
+
+function collectorSessionSnapshot() {
+  let url = currentUrl;
+  if (!url) { try { url = youtubeWebview.getURL(); } catch {} }
+  rememberCollectorDraft(url);
+  return { drafts: collectorDrafts.serialize(), activeVideo: url || '' };
+}
+
+const externalNavigator = CollectorNavigation.createNavigator({
+  webview: youtubeWebview,
+  status(message, error) {
+    collectorLinkStatus.textContent = message;
+    collectorLinkStatus.hidden = !message;
+    collectorLinkStatus.dataset.error = String(error);
+    if (error) {
+      pendingExternalVideo = null;
+      void updateUrlDisplay();
+    }
+  },
+  async prepare(destination, ensureActive) {
+    externalSwitching = true;
+    try {
+      let outgoing = currentUrl;
+      if (!outgoing) { try { outgoing = youtubeWebview.getURL(); } catch {} }
+      const snapshot = collectorSessionSnapshot();
+      if (rows.length || currentRow.length || collectorDrafts.hasDrafts()) {
+        const saved = await window.electronAPI.saveRowAutosave(rows, currentRow, snapshot);
+        if (!saved.success) throw new Error('Could not preserve your collection before opening this link');
+      }
+      ensureActive();
+      if (CollectorSession.videoKey(outgoing) !== destination.videoId) activateCollectorDraft(destination.url);
+      pendingExternalVideo = destination.videoId;
+      currentUrl = destination.url;
+      currentUrlInput.value = currentUrl;
+      markerCaptureAfter = Date.now();
+      document.querySelector('[data-tab="youtube-tab"]').click();
+    } finally { externalSwitching = false; }
+  },
+});
 
 // Settings Modal Elements
 const settingsModal = document.querySelector('#settings-modal');
@@ -113,7 +184,9 @@ setInterval(() => {
       })();
     `)
     .then((markerData) => {
-      if (markerData && typeof markerData.time === 'number' && markerData.time !== lastProcessedMarkerTime) {
+      if (!externalSwitching && markerData && markerData.timestamp >= markerCaptureAfter &&
+          CollectorSession.videoKey(markerData.url) === CollectorSession.videoKey(currentUrl) &&
+          typeof markerData.time === 'number' && markerData.time !== lastProcessedMarkerTime) {
         console.log('📨 [Poll] Marker detected:', markerData);
         lastProcessedMarkerTime = markerData.time;
         processMarker(markerData);
@@ -349,7 +422,15 @@ async function updateUrlDisplay() {
     youtubeWebview
       .executeJavaScript('window.location.href')
       .then((url) => {
+        const id = CollectorSession.videoKey(url);
+        if (externalSwitching || (pendingExternalVideo && id !== pendingExternalVideo)) return;
+        if (pendingExternalVideo === id) pendingExternalVideo = null;
         if (url !== currentUrl) {
+          const previousId = CollectorSession.videoKey(currentUrl);
+          if (previousId && id && previousId !== id) {
+            rememberCollectorDraft();
+            activateCollectorDraft(url);
+          }
           currentUrl = url;
           currentUrlInput.value = url;
         }
@@ -466,6 +547,7 @@ function takeUrlAndMarkers() {
 
   currentRow.push(currentUrl);
   currentRow.push(timestampStr);
+  collectorDrafts.forget(currentUrl);
 
   // Clear for next video
   markers = [];
@@ -489,6 +571,9 @@ function nextRow() {
 
 // Load Row to Panel - Load URL and timestamps from a row for editing (single URL)
 function loadRowToPanel(rowIndex, urlIndex) {
+  externalNavigator.cancel();
+  pendingExternalVideo = null;
+  rememberCollectorDraft();
   const row = rows[rowIndex];
   const url = row[urlIndex];
   const timestampStr = row[urlIndex + 1] || '';
@@ -523,6 +608,13 @@ function loadRowToPanel(rowIndex, urlIndex) {
   // Store the loaded row index and URL index for saving later
   loadedRowIndex = rowIndex;
   loadedUrlIndex = urlIndex;
+  const draft = collectorDrafts.restore(url, rows);
+  if (draft && draft.loadedRowIndex === rowIndex && draft.loadedUrlIndex === urlIndex) {
+    markers = draft.markers;
+    updateMarkersDisplay();
+  }
+  markerCaptureAfter = Date.now();
+  lastProcessedMarkerTime = -1;
 
   // Disable the "Take URL + Markers" button to prevent mistakes while editing
   takeUrlBtn.disabled = true;
@@ -536,12 +628,18 @@ function loadRowToPanel(rowIndex, urlIndex) {
 
 // Edit Existing Row - Load entire row for adding more URLs/timestamps
 function editExistingRow(rowIndex) {
+  externalNavigator.cancel();
+  pendingExternalVideo = null;
+  rememberCollectorDraft();
   const row = rows[rowIndex];
   console.log(`✏️  Editing row ${rowIndex + 1}`);
   console.log(`   Current data:`, row);
 
   // Load the row data into currentRow for appending
   currentRow = [...row];
+  const pendingEdit = Object.values(collectorDrafts.serialize()).find((draft) =>
+    draft.loadedRowIndex === rowIndex && draft.loadedUrlIndex === -1 && draft.rowFingerprint === JSON.stringify(row));
+  if (pendingEdit && Array.isArray(pendingEdit.currentRow)) currentRow = [...pendingEdit.currentRow];
   
   // Clear markers and URL since we're in append mode
   markers = [];
@@ -552,6 +650,7 @@ function editExistingRow(rowIndex) {
   // Store the editing row index
   loadedRowIndex = rowIndex;
   loadedUrlIndex = -1; // -1 indicates we're editing the whole row, not a single URL
+  takeUrlBtn.disabled = false;
 
   updateCurrentRowDisplay();
   updateMarkersDisplay();
@@ -614,6 +713,7 @@ function saveRowChanges() {
     console.log(`✅ Row ${loadedRowIndex + 1} updated with all data`);
   }
 
+  collectorDrafts.forget(currentUrl);
   // Reset the loaded row indices
   loadedRowIndex = -1;
   loadedUrlIndex = -1;
@@ -822,6 +922,12 @@ async function loadRowData() {
 
     // Parse loaded data
     const { data, type } = loadResult;
+    externalNavigator.cancel();
+    pendingExternalVideo = null;
+    markers = [];
+    loadedRowIndex = -1;
+    loadedUrlIndex = -1;
+    collectorDrafts.replace(type === 'rhymx' ? data.drafts : {});
     
     if (type === 'rhymx') {
       // Load from .rhymx autosave format
@@ -833,6 +939,16 @@ async function loadRowData() {
       console.log('✅ Loaded CSV file');
       rows = data;
       currentRow = [];
+    }
+    if (type === 'rhymx' && CollectorSession.videoKey(data.activeVideo)) {
+      currentUrl = data.activeVideo;
+      currentUrlInput.value = currentUrl;
+      activateCollectorDraft(currentUrl);
+      youtubeWebview.src = currentUrl;
+    } else {
+      takeUrlBtn.disabled = false;
+      saveRowBtn.style.display = 'none';
+      updateMarkersDisplay();
     }
 
     // Update all displays
@@ -929,9 +1045,9 @@ function loadSettings() {
  */
 function startAutosaveInterval() {
   autosaveIntervalId = setInterval(async () => {
-    if (rows.length > 0 || currentRow.length > 0) {
+    if (rows.length > 0 || currentRow.length > 0 || markers.length > 0 || collectorDrafts.hasDrafts()) {
       try {
-        await window.electronAPI.saveRowAutosave(rows, currentRow);
+        await window.electronAPI.saveRowAutosave(rows, currentRow, collectorSessionSnapshot());
         console.log('💾 Auto-saved data');
       } catch (err) {
         console.warn('⚠️ Auto-save failed:', err);
@@ -1053,6 +1169,21 @@ try {
 } catch (err) {
   console.warn('⚠️ Error in initial URL update:', err);
 }
+
+window.electronAPI.onCollectorOpen?.((request) => {
+  externalOpenQueue = externalOpenQueue.then(async () => {
+    try {
+      await externalNavigator.open(request);
+      window.electronAPI.collectorOpenResult(request.requestId, { status: 'accepted' });
+    } catch (error) {
+      collectorLinkStatus.hidden = false;
+      collectorLinkStatus.dataset.error = 'true';
+      collectorLinkStatus.textContent = error.message;
+      window.electronAPI.collectorOpenResult(request.requestId, { status: 'error', message: error.message });
+    }
+  });
+});
+window.addEventListener('DOMContentLoaded', () => window.electronAPI.collectorReady?.(), { once: true });
 
 console.log('🎬 YouTube Video Collector - Renderer initialized and ready!');
 console.log('📌 Press , to add markers');

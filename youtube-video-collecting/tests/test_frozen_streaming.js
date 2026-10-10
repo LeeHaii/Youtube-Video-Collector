@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const projectRoot = path.resolve(__dirname, '..');
 const executable = process.env.DOWNLOADER_EXE
@@ -12,7 +12,8 @@ const executable = process.env.DOWNLOADER_EXE
 const inputCsv = path.join(__dirname, 'fixtures', 'one_clip.csv');
 const localAppData = path.join(__dirname, 'streaming-app-data');
 
-test('frozen downloader streams logs before graceful Stop completes', { timeout: 15_000 }, async (context) => {
+for (const resolution of [null, '2160']) {
+test(`frozen downloader streams logs before graceful Stop completes (${resolution || 'legacy Auto'})`, { timeout: 15_000 }, async (context) => {
   if (process.platform !== 'win32' || !fs.existsSync(executable)) {
     context.skip('requires the frozen Windows downloader executable');
     return;
@@ -25,7 +26,9 @@ test('frozen downloader streams logs before graceful Stop completes', { timeout:
   let stderr = '';
   let firstChunkAt = null;
   const startedAt = Date.now();
-  const child = spawn(executable, [inputCsv, __dirname, '0', '0', '0', '0', stopFlag], {
+  const args = [inputCsv, __dirname, '0', '0', '0', '0', stopFlag];
+  if (resolution) args.push('--resolution', resolution);
+  const child = spawn(executable, args, {
     stdio: 'pipe',
     shell: false,
     env: {
@@ -62,4 +65,33 @@ test('frozen downloader streams logs before graceful Stop completes', { timeout:
   assert.equal(code, 3, `expected graceful canceled exit; stderr: ${stderr}`);
   assert.match(stdout, /Starting 5-Sec Download/);
   assert.match(stdout, /Processing canceled by user/);
+  assert.match(stdout, new RegExp(`Maximum video height: ${resolution || 'Auto'}`));
+});
+}
+
+test('frozen CLI supports help, fatal validation, and named resolution without optional positional arguments', { timeout: 30_000 }, (context) => {
+  if (process.platform !== 'win32' || !fs.existsSync(executable)) {
+    context.skip('requires the frozen Windows downloader executable');
+    return;
+  }
+  const run = (args) => spawnSync(executable, args, {
+    encoding: 'utf8', timeout: 10_000, windowsHide: true,
+    env: { ...process.env, LOCALAPPDATA: localAppData, YVC_DISABLE_RUNTIME_DOWNLOAD: '1' },
+  });
+  const help = run(['--help']);
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /--resolution/);
+  const invalid = run([inputCsv, __dirname, '--resolution', '999']);
+  assert.equal(invalid.status, 1, invalid.stderr);
+  assert.match(invalid.stderr, /invalid choice/);
+  assert.doesNotMatch(invalid.stdout, /Starting 5-Sec/);
+  try {
+    const empty = run([path.join(__dirname, 'fixtures/no_clips.csv'), __dirname, '--resolution', '720']);
+    assert.equal(empty.status, 0, empty.stderr);
+    assert.match(empty.stdout, /Maximum video height: 720/);
+    assert.match(empty.stdout, /EJS solver: 0\.8\.0/);
+    assert.match(empty.stdout, /DOWNLOAD_SUMMARY:.*"total":0/);
+  } finally {
+    fs.rmSync(localAppData, { recursive: true, force: true });
+  }
 });

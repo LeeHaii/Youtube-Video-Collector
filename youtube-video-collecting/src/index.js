@@ -5,6 +5,9 @@ const { spawn, execFile, execSync } = require('child_process');
 const os = require('os');
 const { ElectronBlocker } = require('@cliqz/adblocker-electron');
 const fetch = require('node-fetch');
+const { CollectorBridge } = require('./collector-bridge');
+const { registerNativeHost, unregisterNativeHost } = require('./native-host-registration');
+const { validateDownloadResolution, buildDownloadArguments } = require('./downloader-options');
 const {
   buildDownloadErrorSummary,
   consumeDownloaderStdout,
@@ -15,8 +18,16 @@ const {
 // Suppress MaxListenersExceededWarning
 require('events').EventEmitter.defaultMaxListeners = 15;
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (require('electron-squirrel-startup')) {
+const squirrelEvent = process.argv.find((arg) => /^--squirrel-/.test(arg));
+if (process.platform === 'win32' && squirrelEvent) {
+  try {
+    if (squirrelEvent === '--squirrel-uninstall') unregisterNativeHost();
+    else if (['--squirrel-install', '--squirrel-updated'].includes(squirrelEvent)) registerNativeHost(app);
+  } catch (error) { console.warn('Collector browser registration:', error.message); }
+}
+const installerStartup = require('electron-squirrel-startup');
+const primaryInstance = !installerStartup && app.requestSingleInstanceLock();
+if (!primaryInstance) {
   app.quit();
 }
 
@@ -190,16 +201,71 @@ const createWindow = () => {
 };
 
 let mainWindow;
+let collectorBridge;
+const collectorOpenRequests = new Map();
+
+app.on('second-instance', (_event, argv) => {
+  if (process.platform === 'win32' && argv.some((arg) => arg.startsWith('--collector-extension-id='))) {
+    try { registerNativeHost(app, argv); }
+    catch (error) { console.warn('Collector browser registration:', error.message); }
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
+function deliverCollectorRequest(request, signal) {
+  return new Promise((resolve, reject) => {
+    const window = mainWindow;
+    if (!window || window.isDestroyed() || signal.aborted) { reject(new Error('Collector is not ready')); return; }
+    const abort = () => { collectorOpenRequests.delete(request.requestId); reject(new Error('Request expired')); };
+    signal.addEventListener('abort', abort, { once: true });
+    collectorOpenRequests.set(request.requestId, {
+      sender: window.webContents,
+      finish(result) {
+        signal.removeEventListener('abort', abort);
+        collectorOpenRequests.delete(request.requestId);
+        if (result?.status === 'accepted') resolve();
+        else reject(new Error(result?.message || 'Collector could not open the link'));
+      },
+    });
+    if (window.isMinimized()) window.restore();
+    window.show();
+    window.focus();
+    window.webContents.send('collector-open-video', request);
+  });
+}
+
+ipcMain.on('collector-ready', (event) => {
+  if (event.sender === mainWindow?.webContents) collectorBridge?.setReady(true);
+});
+ipcMain.on('collector-open-result', (event, requestId, result) => {
+  const pending = collectorOpenRequests.get(requestId);
+  if (pending?.sender === event.sender) pending.finish(result);
+});
+app.on('before-quit', () => { void collectorBridge?.close(); });
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
-  // Initialize adblocker before creating window
-  await initializeAdblocker();
+  if (!primaryInstance) return;
+  if (process.platform === 'win32') {
+    try {
+      const config = registerNativeHost(app);
+      collectorBridge = new CollectorBridge({ ...config, onOpen: deliverCollectorRequest });
+      await collectorBridge.start();
+    } catch (error) { console.warn('Collector browser bridge:', error.message); }
+  }
+  // Browser delivery must not wait for a remote filter download.
+  void initializeAdblocker();
 
   console.log('🚀 Creating main application window...');
   mainWindow = createWindow();
+  mainWindow.webContents.on('did-start-loading', () => collectorBridge?.setReady(false));
+  mainWindow.on('closed', () => collectorBridge?.setReady(false));
 
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
@@ -344,7 +410,7 @@ ipcMain.handle('load-row-data', async (event, filePath) => {
 });
 
 // YouTube Collector - Auto-save to .rhymx
-ipcMain.handle('save-row-autosave', async (event, rows, currentRow) => {
+ipcMain.handle('save-row-autosave', async (event, rows, currentRow, collectorSession) => {
   try {
     const tempDir = os.tmpdir();
     const autosaveDir = path.join(tempDir, 'youtube-collector-autosaves');
@@ -368,9 +434,11 @@ ipcMain.handle('save-row-autosave', async (event, rows, currentRow) => {
 
     const data = {
       timestamp: new Date().toISOString(),
-      version: '1.0',
+      version: '1.1',
       rows,
       currentRow,
+      drafts: collectorSession?.drafts || {},
+      activeVideo: collectorSession?.activeVideo || '',
     };
 
     fs.writeFileSync(autosavePath, JSON.stringify(data, null, 2), 'utf8');
@@ -418,11 +486,13 @@ ipcMain.handle('get-autosave-path', async (event) => {
 });
 
 // 5-Sec Downloader - Start Download
-ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax) => {
+ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, resolution = 'auto') => {
   try {
     if (downloadProcess && downloadProcess.exitCode === null) {
       return { success: false, error: 'A download is already running or stopping. Please wait for it to finish.' };
     }
+
+    const selectedResolution = validateDownloadResolution(resolution);
 
     // Reset error tracking
     rateLimitErrors = [];
@@ -452,6 +522,7 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
     console.log(`📁 Output: ${outputPath}`);
     console.log(`⏱️  Clip Sleep: ${clipSleepMin}-${clipSleepMax}s`);
     console.log(`⏱️  Row Sleep: ${rowSleepMin}-${rowSleepMax}s`);
+    console.log(`📐 Maximum video height: ${selectedResolution}`);
 
     // Create a unique stop flag file path for graceful shutdown
     const stopFlagPath = path.join(os.tmpdir(), `downloader-stop-flag-${Date.now()}.txt`);
@@ -459,7 +530,9 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
     console.log(`⚠️  Stop flag path: ${stopFlagPath}`);
 
     // Spawn executable process WITHOUT shell to properly handle spaces in paths
-    const childProcess = spawn(exePath, [csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, stopFlagPath], {
+    const childProcess = spawn(exePath, buildDownloadArguments(
+      csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, stopFlagPath, selectedResolution,
+    ), {
       stdio: 'pipe',
       shell: false,
       // The packaged Python process writes to pipes, which are otherwise block-buffered.

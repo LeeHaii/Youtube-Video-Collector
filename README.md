@@ -29,6 +29,9 @@ Watch YouTube inside the application and quickly collect important timestamps.
 * Automatic `.rhymx` session backups
 * Configurable autosave interval
 * Optional **5-second offset marking**
+* Open timestamped Google Sheets links directly in the collector with the Windows/Chrome pilot extension
+
+See [Collector Links setup](youtube-video-collecting/extension/README.md) for extension installation and connection checks.
 
 ---
 
@@ -40,8 +43,11 @@ Turn collected timestamps into actual video clips.
 * Downloads a 5-second section from every timestamp
 * Supports multiple videos and timestamps per row
 * Downloads targeted ranges instead of intentionally downloading the complete source first
-* Up to 1080p when an appropriate format is available
-* FFmpeg processing
+* Maximum video height selection from 360p through 2160p (4K), with Auto retaining the previous resolution policy
+* Selects the highest available resolution within the chosen limit, without upscaling
+* MP4 output with 8-bit H.264 High video and AAC audio; HDR sources are tone mapped to SDR
+* Preserves the source frame rate, including 4K at 60 fps
+* FFmpeg processing and output validation
 * Configurable delays between clips
 * Configurable delays between rows
 * Start / Stop controls
@@ -537,6 +543,16 @@ Input CSV
 Output Folder
 ```
 
+Choose **Maximum video height**: Auto (the existing download behavior), 360p,
+480p, 720p, 1080p, 1440p, or 2160p (4K). Explicit choices use the largest available
+height within the limit. Selecting 4K for a video that tops out at 1080p downloads
+1080p; selecting 720p for a 480p source downloads 480p without upscaling.
+
+Portrait videos are limited by pixel height too. If none of the delivery profiles
+offers a known video height within an explicit limit, that clip is reported as a
+format failure and can be exported for retry. The choice stays fixed until the
+current run finishes or stops.
+
 Configure optional delays:
 
 ```text
@@ -568,6 +584,27 @@ Downloaded range:
 ```
 
 The downloader uses `yt-dlp` range downloading and FFmpeg processing.
+
+Choose **Maximum video height** before starting a download. Choosing 4K for a
+video whose maximum is 1080p produces a 1080p clip. The limit applies to pixel
+height, including portrait videos. Auto retains the previous source-selection
+policy; the output encoding fix applies to every resolution setting.
+
+The downloader produces MP4 files with H.264 High / 8-bit `yuv420p` video and
+AAC audio. It checks the selected stream's actual color tags once per cached
+delivery session and tone maps HLG/PQ HDR to BT.709 SDR. It preserves dimensions
+and frame rate and validates each completed output before reporting success.
+If a CDN rejects a direct source probe, it copies a one-second sample through
+FFmpeg's range-input path and probes that temporary sample instead. This does
+not re-encode the sample, and the temporary files are removed after probing.
+4K60 output can require H.264 level 5.2, which some Windows players do not
+support. Use a player that supports this level when preserving 60 fps.
+
+Install a full FFmpeg distribution with both `ffmpeg` and `ffprobe`, including
+the `libx264`/AAC encoders and `zscale`, `tonemap`, and `sidedata` filters. Keep
+ffprobe beside ffmpeg or on PATH. The downloader reports a prerequisite error
+before downloading if these tools are missing. Existing downloaded files are
+not converted automatically.
 
 ---
 

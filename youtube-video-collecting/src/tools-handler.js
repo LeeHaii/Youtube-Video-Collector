@@ -13,6 +13,7 @@ const clipSleepMinInput = document.getElementById('clip-sleep-min');
 const clipSleepMaxInput = document.getElementById('clip-sleep-max');
 const rowSleepMinInput = document.getElementById('row-sleep-min');
 const rowSleepMaxInput = document.getElementById('row-sleep-max');
+const downloaderResolutionInput = document.getElementById('downloader-resolution');
 const downloaderLog = document.getElementById('downloader-log');
 const startBtn = document.getElementById('downloader-start-btn');
 const stopBtn = document.getElementById('downloader-stop-btn');
@@ -56,6 +57,7 @@ window.electronAPI.onDownloadLog?.((message) => {
 
 // Setup download complete listener
 window.electronAPI.onDownloadComplete?.((completion) => {
+  downloaderResolutionInput.disabled = false;
   console.log('✅ [Download Complete]:', completion);
   if (startBtn && stopBtn && downloaderLog) {
     const result = typeof completion === 'boolean' ? { success: completion } : (completion || {});
@@ -195,6 +197,7 @@ startBtn.addEventListener('click', () => {
   const clipSleepMax = parseFloat(clipSleepMaxInput.value) || 2;
   const rowSleepMin = parseFloat(rowSleepMinInput.value) || 10;
   const rowSleepMax = parseFloat(rowSleepMaxInput.value) || 15;
+  const resolution = downloaderResolutionInput.value;
 
   console.log('🔵 Start Download button clicked');
   console.log('   CSV Path:', csvPath);
@@ -214,22 +217,24 @@ startBtn.addEventListener('click', () => {
     return;
   }
 
-  logDownloader('🚀 Starting 5-Sec Download...');
   clearDownloaderLog();
+  logDownloader(`🚀 Starting 5-Sec Download — maximum video height: ${resolution === 'auto' ? 'Auto (current behavior)' : `${resolution}p`}`);
   if (errorExtractionContainer) errorExtractionContainer.style.display = 'none';
   startBtn.disabled = true;
   stopBtn.disabled = false;
   stopBtn.textContent = 'Stop';
+  downloaderResolutionInput.disabled = true;
 
   // Call IPC to start download
   console.log('📤 Calling window.electronAPI.startDownload()');
-  window.electronAPI.startDownload(csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax)
+  window.electronAPI.startDownload(csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, resolution)
     .then((result) => {
       console.log('✅ startDownload IPC returned:', result);
       if (!result.success) {
         logDownloader(`❌ ${result.error}`);
         startBtn.disabled = false;
         stopBtn.disabled = true;
+        downloaderResolutionInput.disabled = false;
       }
     })
     .catch((err) => {
@@ -237,6 +242,7 @@ startBtn.addEventListener('click', () => {
       logDownloader(`❌ Download failed: ${err.message}`);
       startBtn.disabled = false;
       stopBtn.disabled = true;
+      downloaderResolutionInput.disabled = false;
     });
 });
 
