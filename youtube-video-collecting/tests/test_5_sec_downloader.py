@@ -266,7 +266,10 @@ class DownloaderTests(unittest.TestCase):
         original_youtube_dl = downloader.YoutubeDL
         downloader.YoutubeDL = FakeYoutubeDL
         try:
-            with tempfile.TemporaryDirectory() as temporary_directory:
+            with tempfile.TemporaryDirectory() as temporary_directory, \
+                    patch.object(downloader, "check_encoding_tools", return_value=Path("ffprobe.exe")), \
+                    patch.object(downloader, "resolve_encoding_policy", return_value=downloader.EncodingPolicy(1280, 720, 30, "SDR", True)) as resolve, \
+                    patch.object(downloader, "validate_output") as validate:
                 session = downloader.VideoDownloadSession(
                     "https://www.youtube.com/watch?v=test",
                     downloader.profiles_for_resolution(720)[0],
@@ -279,6 +282,9 @@ class DownloaderTests(unittest.TestCase):
                 session.download(0, 5, "first.%(ext)s")
                 session.download(5, 10, "second.%(ext)s")
                 self.assertEqual(session.options["format_sort"], ["height", "+hasaud"])
+                self.assertEqual(resolve.call_count, 1)
+                self.assertEqual([call.args[0].name for call in validate.call_args_list], ["first.mp4", "second.mp4"])
+                self.assertIn("-pix_fmt", session.ydl.params["external_downloader_args"]["ffmpeg_o"])
         finally:
             downloader.YoutubeDL = original_youtube_dl
 
@@ -287,7 +293,10 @@ class DownloaderTests(unittest.TestCase):
             ("second.%(ext)s", True),
         ])
         self.assertEqual(len(extracted), 1)
-        self.assertEqual(logs, ["      Selected source: 1280x720 (standard)\n"])
+        self.assertEqual(logs, [
+            "      Selected source: 1280x720, 30 fps, SDR (standard)\n",
+            "      Output: MP4, H.264 High, 8-bit SDR, 1280x720, 30 fps\n",
+        ])
 
     def test_successful_fallback_profile_is_reused_first(self):
         attempts = []

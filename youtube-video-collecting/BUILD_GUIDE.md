@@ -18,6 +18,12 @@ Instead of shipping Python scripts and requiring users to have Python installed,
 
 Before you start, make sure you have:
 
+For downloader runtime verification, install a full FFmpeg distribution with
+`ffmpeg` and `ffprobe` (preferably from the same build), the `libx264` and AAC
+encoders, and the `zscale`, `tonemap`, and `sidedata` filters. Keep ffprobe beside
+ffmpeg or on PATH. These remain external runtime prerequisites; PyInstaller
+bundles the Python dependencies, including EJS.
+
 ```bash
 # Python 3.8+ installed
 python --version
@@ -104,11 +110,20 @@ dist/5_sec_downloader.exe input.csv output_folder 3 5 2 5
 dist/5_sec_downloader.exe input.csv output_folder --resolution 2160
 ```
 
-The resolution flag defaults to `auto`, preserving the previous behavior. Allowed
+The resolution flag defaults to `auto`, preserving the previous selection policy. Allowed
 explicit values are `360`, `480`, `720`, `1080`, `1440`, and `2160`. Existing
 positional arguments, including the stop flag path after the four sleep values,
 retain their order. Rebuild the downloader executable whenever its Python source
 changes, and package the rebuilt executable with the matching UI.
+
+All resolution settings now encode the requested range as H.264 High / 8-bit
+SDR video with AAC in MP4. HLG/PQ sources are tone mapped to BT.709 SDR, using a
+cached probe of the selected stream rather than yt-dlp's inferred HDR label.
+Source dimensions and frame rate are retained; 4K60 can require a player with
+H.264 level 5.2 support. Each final output is validated before success is logged.
+CDNs that reject direct ffprobe requests are checked through a temporary,
+lossless one-second FFmpeg range sample. The sample is removed after probing,
+and its color policy is cached for subsequent timestamps in that session.
 
 To rebuild just this tool from the project directory:
 
@@ -120,8 +135,16 @@ Run downloader regression tests with the pinned Python dependencies installed:
 
 ```bash
 python tests/test_5_sec_downloader.py
+python tests/test_downloader_encoding.py
 node --test tests/test_downloader_options.js tests/test_downloader_summary.js tests/test_frozen_streaming.js
 ```
+
+`test_downloader_encoding.py` generates SDR, 10-bit SDR, HLG, PQ, and WebM
+fixtures and serves them only on localhost. It exercises the real pinned
+yt-dlp/FFmpeg range downloader, combined and separate streams, cached sessions,
+SDR conversion, MP4 finalization, frame rate, duration, and full decoding.
+Repeat a live HDR source download and a 4K60 smoke test before distributing a
+rebuilt executable; small synthetic fixtures alone do not verify 4K playback.
 
 ---
 

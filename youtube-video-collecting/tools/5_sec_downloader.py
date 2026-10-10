@@ -10,9 +10,12 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from dataclasses import dataclass, field, replace
+from fractions import Fraction
+from functools import lru_cache
 from importlib import metadata
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -231,6 +234,7 @@ def parse_input_csv(csv_path: str):
 def sanitize_diagnostic(message: str) -> str:
     # Signed googlevideo URLs contain IP/session data; retain the host but redact queries.
     message = re.sub(r"(https?://[^\s?]+)\?[^\s]+", r"\1?<redacted>", str(message))
+    message = re.sub(r"(/videoplayback)\?[^\s]+", r"\1?<redacted>", message)
     return " ".join(message.replace("\r", " ").replace("\n", " ").split())[:800]
 
 
@@ -475,6 +479,232 @@ def find_ffmpeg_exe() -> Optional[Path]:
     return Path(executable) if executable else None
 
 
+class EncodingError(RuntimeError):
+    """A local encoding/prerequisite failure that changing delivery cannot fix."""
+
+
+def find_ffprobe_exe(ffmpeg_executable: Path) -> Optional[Path]:
+    sibling = ffmpeg_executable.with_name("ffprobe.exe" if os.name == "nt" else "ffprobe")
+    if sibling.is_file():
+        return sibling
+    executable = shutil.which("ffprobe")
+    return Path(executable) if executable else None
+
+
+def media_command(arguments: List[str], timeout: float = 30) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        arguments, capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=timeout, check=False,
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+    )
+
+
+@lru_cache(maxsize=8)
+def check_encoding_tools(ffmpeg_executable: Path) -> Path:
+    ffprobe = find_ffprobe_exe(ffmpeg_executable)
+    if ffprobe is None:
+        raise EncodingError("ffprobe not found. Install the full FFmpeg distribution (ffmpeg and ffprobe).")
+    try:
+        probe_version = media_command([str(ffprobe), "-version"], timeout=10)
+        if probe_version.returncode:
+            raise EncodingError("ffprobe cannot run. Install ffmpeg and ffprobe from the same complete build.")
+    except (OSError, subprocess.SubprocessError) as error:
+        raise EncodingError(f"Cannot run ffprobe: {sanitize_diagnostic(error)}") from error
+    for option, required in (("-encoders", ("libx264", "aac")),
+                             ("-filters", ("zscale", "tonemap", "sidedata"))):
+        try:
+            result = media_command([str(ffmpeg_executable), "-hide_banner", option])
+        except (OSError, subprocess.SubprocessError) as error:
+            raise EncodingError(f"Cannot check FFmpeg capabilities: {sanitize_diagnostic(error)}") from error
+        names = {line.split()[1] for line in result.stdout.splitlines() if len(line.split()) >= 2}
+        missing = set(required) - names
+        if result.returncode or missing:
+            raise EncodingError(f"Install a full FFmpeg build with: {', '.join(sorted(missing or required))}.")
+    return ffprobe
+
+
+def frame_rate(value) -> float:
+    try:
+        rate = float(Fraction(str(value)))
+        return rate if 0 < rate < 1000 else 0
+    except (ValueError, TypeError, ZeroDivisionError):
+        return 0
+
+
+def probe_media(ffprobe: Path, source: str, *, headers=None, cookies=None, local=False) -> dict:
+    arguments = [str(ffprobe), "-v", "error"]
+    if source.startswith(("http://", "https://")):
+        arguments += ["-rw_timeout", "20000000", "-probesize", "2000000", "-analyzeduration", "2000000"]
+        if headers:
+            arguments += ["-headers", "".join(f"{key}: {value}\r\n" for key, value in headers.items())]
+        if cookies:
+            arguments += ["-cookies", cookies]
+    arguments += ["-show_streams", "-show_format", "-of", "json", source]
+    try:
+        result = media_command(arguments)
+        if result.returncode:
+            raise RuntimeError(sanitize_diagnostic(result.stderr) or "ffprobe could not read the media")
+        return json.loads(result.stdout)
+    except (OSError, subprocess.SubprocessError, ValueError, RuntimeError) as error:
+        if local:
+            raise EncodingError(f"Output validation failed: {sanitize_diagnostic(error)}") from error
+        # HTTP/access failures must remain eligible for the existing delivery fallbacks.
+        raise RuntimeError(f"Source probe failed: {sanitize_diagnostic(error)}") from error
+
+
+def selected_video(info: dict) -> Tuple[dict, bool]:
+    selection = (info.get("requested_downloads") or [info])[0]
+    formats = selection.get("requested_formats") or info.get("requested_formats") or [selection]
+    video = next((fmt for fmt in formats if fmt.get("vcodec") != "none"), None)
+    if video is None:
+        raise EncodingError("Selected format has no video stream.")
+    return {**info, **video}, any(fmt.get("acodec") not in (None, "none") for fmt in formats)
+
+
+@dataclass(frozen=True)
+class EncodingPolicy:
+    width: int
+    height: int
+    fps: float
+    dynamic_range: str
+    has_audio: bool
+    primaries: str = "bt2020"
+    matrix: str = "bt2020nc"
+    color_range: str = "limited"
+
+    @property
+    def hdr(self) -> bool:
+        return self.dynamic_range in ("HLG", "PQ")
+
+
+def copy_source_sample(ydl: YoutubeDL, video: dict, start: float, sample: Path) -> None:
+    # Reprocess the cached extraction exactly as a real clip. yt-dlp prepares
+    # the selected format's headers/cookies at this stage; a direct FD call skips it.
+    overrides = {
+        "force_keyframes_at_cuts": False,
+        "outtmpl": {**ydl.params["outtmpl"], "default": str(sample.with_suffix(".%(ext)s"))},
+        "download_ranges": lambda *_: [{"start_time": start, "end_time": start + 1}],
+        "external_downloader_args": {"ffmpeg_i": ["-rw_timeout", "20000000"],
+                                     "ffmpeg_o": ["-c", "copy", "-copyinkf", "-f", "mp4"]},
+    }
+    original = {key: ydl.params[key] for key in overrides}
+    try:
+        ydl.params.update(overrides)
+        ydl.process_ie_result(copy.deepcopy(video), download=True)
+        sample.with_suffix(".mp4").replace(sample)
+    finally:
+        ydl.params.update(original)
+
+
+def probe_selected_source(video: dict, ffprobe: Path, headers, cookies: str, *,
+                          ffmpeg_executable=None, cache_directory=None, start=0, ydl=None, selected_info=None) -> dict:
+    try:
+        return probe_media(ffprobe, video["url"], headers=headers, cookies=cookies)
+    except RuntimeError as probe_error:
+        if ffmpeg_executable is None or cache_directory is None or ydl is None:
+            raise
+        # Some CDN URLs reject a direct probe but permit FFmpeg's normal range
+        # request. Copy a bounded sample through that input path, then probe locally.
+        # No encoding, HDR guessing, full-video download, or source-policy change.
+        Path(cache_directory).mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="source-probe-", dir=cache_directory) as directory:
+            sample = Path(directory) / "source.mkv"
+            try:
+                copy_source_sample(ydl, {**(selected_info or video), "url": video["url"]}, start, sample)
+                return probe_media(ffprobe, str(sample), local=True)
+            except (OSError, subprocess.SubprocessError, RuntimeError) as sample_error:
+                # Preserve the remote failure category for delivery retries.
+                raise RuntimeError(f"{probe_error} | Source sample failed: {sanitize_diagnostic(sample_error)}") from sample_error
+
+
+def resolve_encoding_policy(info: dict, ffprobe: Path, ydl: YoutubeDL, *,
+                            ffmpeg_executable=None, cache_directory=None, start=0) -> EncodingPolicy:
+    video, has_audio = selected_video(info)
+    url = video.get("url")
+    if not url:
+        raise EncodingError("Selected stream lacks the URL needed to determine color and frame rate.")
+    # Match YoutubeDL.dl(): extraction metadata can omit the global User-Agent
+    # and other default headers until the actual download is prepared.
+    headers = dict(ydl._calc_headers(video)) if ydl is not None else {
+        **(info.get("http_headers") or {}), **(video.get("http_headers") or {})}
+    cookies = ydl.cookiejar.get_cookies_for_url(url) if url.startswith(("http://", "https://")) else []
+    cookie_text = "".join(f"{cookie.name}={cookie.value}; path={cookie.path}; domain={cookie.domain};\n"
+                          for cookie in cookies)
+    # yt-dlp fills missing dynamic_range with SDR, and VP9 profile 2 with HDR10.
+    # Neither is proof of the actual transfer function (HLG can use either codec).
+    data = probe_selected_source(video, ffprobe, headers, cookie_text, ffmpeg_executable=ffmpeg_executable,
+                                 cache_directory=cache_directory, start=start, ydl=ydl, selected_info=info)
+    stream = next((stream for stream in data.get("streams", []) if stream.get("codec_type") == "video"), None)
+    if stream is None:
+        raise EncodingError("Selected stream has no probeable video.")
+    transfer = stream.get("color_transfer")
+    dynamic = {"arib-std-b67": "HLG", "smpte2084": "PQ"}.get(transfer, "SDR")
+    if transfer in (None, "unknown", "unspecified"):
+        pix_fmt = stream.get("pix_fmt", "")
+        high_depth = bool(re.search(r"(?:10|12|14|16|f32)", pix_fmt))
+        if high_depth or not pix_fmt or str(video.get("dynamic_range") or "SDR").upper() != "SDR":
+            raise EncodingError("Cannot determine source transfer characteristics; refusing to guess HDR color conversion.")
+    width, height = stream.get("width"), stream.get("height")
+    fps = frame_rate(stream.get("avg_frame_rate")) or frame_rate(stream.get("r_frame_rate"))
+    has_audio = has_audio or any(stream.get("codec_type") == "audio" for stream in data.get("streams", []))
+    primaries = stream.get("color_primaries")
+    matrix = stream.get("color_space")
+    primaries = primaries if primaries not in (None, "unknown", "unspecified") else "bt2020"
+    matrix = matrix if matrix not in (None, "unknown", "unspecified") else "bt2020nc"
+    color_range = "full" if stream.get("color_range") == "pc" else "limited"
+    if not width or not height or not fps:
+        raise EncodingError("Cannot determine source dimensions or frame rate.")
+    if width % 2 or height % 2:
+        raise EncodingError("Source dimensions must be even for H.264 yuv420p; refusing to resize the selected source.")
+    return EncodingPolicy(int(width), int(height), fps, dynamic, has_audio, primaries, matrix, color_range)
+
+
+def encoding_arguments(policy: Optional[EncodingPolicy] = None) -> List[str]:
+    arguments = ["-c:v", "libx264", "-profile:v", "high", "-preset", "veryfast", "-crf", "18",
+                 "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-f", "mp4"]
+    if policy and policy.hdr:
+        transfer = "arib-std-b67" if policy.dynamic_range == "HLG" else "smpte2084"
+        graph = (
+            f"zscale=transferin={transfer}:primariesin={policy.primaries}:matrixin={policy.matrix}:"
+            f"rangein={policy.color_range}:transfer=linear:npl=100,format=gbrpf32le,"
+            "zscale=primaries=bt709,tonemap=tonemap=hable:desat=2,"
+            "zscale=transfer=bt709:matrix=bt709:range=limited,format=yuv420p,"
+            "sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA,"
+            "sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL"
+        )
+        arguments += ["-vf", graph, "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
+                      "-color_range", "tv"]
+    return arguments
+
+
+def validate_output(path: Path, policy: EncodingPolicy, duration: float, ffprobe: Path) -> None:
+    data = probe_media(ffprobe, str(path), local=True)
+    streams = data.get("streams", [])
+    video = next((stream for stream in streams if stream.get("codec_type") == "video"), {})
+    audio = next((stream for stream in streams if stream.get("codec_type") == "audio"), {})
+    if "mp4" not in data.get("format", {}).get("format_name", "").split(","):
+        raise EncodingError("Output validation failed: expected MP4 container.")
+    if (video.get("codec_name"), video.get("profile"), video.get("pix_fmt")) != ("h264", "High", "yuv420p"):
+        raise EncodingError("Output validation failed: expected 8-bit H.264 High / yuv420p.")
+    if (video.get("width"), video.get("height")) != (policy.width, policy.height):
+        raise EncodingError("Output validation failed: source dimensions changed.")
+    fps = frame_rate(video.get("avg_frame_rate")) or frame_rate(video.get("r_frame_rate"))
+    if abs(fps - policy.fps) > max(0.1, policy.fps * 0.01):
+        raise EncodingError(f"Output validation failed: frame rate changed ({policy.fps:g} to {fps:g}).")
+    if policy.has_audio and audio.get("codec_name") != "aac":
+        raise EncodingError("Output validation failed: expected AAC audio.")
+    tolerance = max(0.15, 2 / policy.fps)
+    actual_duration = frame_rate(data.get("format", {}).get("duration"))
+    if abs(actual_duration - duration) > tolerance:
+        raise EncodingError(f"Output validation failed: expected {duration:g}s, got {actual_duration:g}s.")
+    if policy.hdr:
+        if any(video.get(field) != "bt709" for field in ("color_transfer", "color_primaries", "color_space")):
+            raise EncodingError("Output validation failed: HDR was not converted/tagged as BT.709 SDR.")
+        stale = ("Mastering display metadata", "Content light level metadata")
+        if any(side.get("side_data_type") in stale for side in video.get("side_data_list", [])):
+            raise EncodingError("Output validation failed: stale HDR metadata remains.")
+
+
 def build_ydl_options(
     output_template: str,
     start: int,
@@ -494,14 +724,10 @@ def build_ydl_options(
         ],
         "force_keyframes_at_cuts": True,
         "merge_output_format": "mp4",
-        "postprocessor_args": [
-            "-c:v", "libx264",
-            "-preset", "veryfast",
-            "-crf", "18",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "aac",
-            "-b:a", "192k",
-        ],
+        "external_downloader_args": {"ffmpeg_o": encoding_arguments()},
+        # A combined WebM input still needs an .mp4 suffix; this is stream-copy only.
+        "postprocessors": [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}],
+        "postprocessor_args": {"VideoRemuxer+ffmpeg_o": ["-movflags", "+faststart"]},
         "noplaylist": True,
         "quiet": True,
         "no_warnings": False,
@@ -563,6 +789,10 @@ class VideoDownloadSession:
         )
         self.ydl = YoutubeDL(self.options)
         self.info = None
+        self.ffmpeg_executable = ffmpeg_executable
+        self.cache_directory = cache_directory
+        self.ffprobe = None
+        self.encoding_policy = None
 
     def download(self, start: int, end: int, output_template: str) -> None:
         self.logger.clear()
@@ -576,10 +806,27 @@ class VideoDownloadSession:
         ]
         if self.info is None:
             self.info = self.ydl.extract_info(self.url, download=False)
-            width, height = self.info.get("width"), self.info.get("height")
-            if width and height:
-                self.log_callback(f"      Selected source: {width}x{height} ({self.profile.name})\n")
+        if self.encoding_policy is None:
+            self.ffprobe = check_encoding_tools(self.ffmpeg_executable)
+            self.encoding_policy = resolve_encoding_policy(self.info, self.ffprobe, self.ydl,
+                                                           ffmpeg_executable=self.ffmpeg_executable,
+                                                           cache_directory=self.cache_directory, start=start)
+            policy = self.encoding_policy
+            if self.profile.max_height is not None and policy.height > self.profile.max_height:
+                raise EncodingError("Probed source exceeds the selected maximum video height.")
+            self.ydl.params["external_downloader_args"] = {"ffmpeg_o": encoding_arguments(policy)}
+            self.log_callback(f"      Selected source: {policy.width}x{policy.height}, {policy.fps:g} fps, "
+                              f"{policy.dynamic_range} ({self.profile.name})\n")
+            self.log_callback(f"      Output: MP4, H.264 High, 8-bit {'SDR (tone mapped)' if policy.hdr else 'SDR'}, "
+                              f"{policy.width}x{policy.height}, {policy.fps:g} fps\n")
+            if policy.width * policy.height * policy.fps > 3840 * 2160 * 30:
+                self.log_callback("      Compatibility note: retained frame rate can require a player supporting "
+                                  "H.264 level 5.2 or higher.\n")
         self.ydl.process_ie_result(copy.deepcopy(self.info), download=True)
+        output_path = Path(output_template.replace("%(ext)s", "mp4"))
+        source_duration = self.info.get("duration")
+        duration = min(end - start, max(0, source_duration - start)) if source_duration else end - start
+        validate_output(output_path, self.encoding_policy, duration, self.ffprobe)
 
     def diagnostics(self) -> str:
         return self.logger.recent_text()
@@ -709,7 +956,7 @@ def download_clip(
             session.close()
             session_cache.pop(profile.name, None)
 
-            if last_category not in RETRYABLE_ERRORS:
+            if isinstance(error, EncodingError) or last_category not in RETRYABLE_ERRORS:
                 break
 
     cleanup_partial_outputs(output_template)
@@ -923,6 +1170,8 @@ def main() -> None:
         print(f"   Maximum video height: {args.max_height or 'Auto (current behavior)'}")
         print(f"   yt-dlp: {YT_DLP_VERSION}")
         print(f"   FFmpeg: {ffmpeg_executable}")
+        print(f"   FFprobe: {check_encoding_tools(ffmpeg_executable)}")
+        print("   Output encoding: H.264 High / 8-bit SDR + AAC; source frame rate retained")
         print(f"   EJS solver: {ejs_version() or 'not bundled (remote fallback enabled)'}")
         print(f"   Clip Sleep: {clip_sleep_min}-{clip_sleep_max}s")
         print(f"   Row Sleep: {row_sleep_min}-{row_sleep_max}s")
