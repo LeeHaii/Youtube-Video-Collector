@@ -25,7 +25,7 @@ ffmpeg or on PATH. These remain external runtime prerequisites; PyInstaller
 bundles the Python dependencies, including EJS.
 
 ```bash
-# Python 3.8+ installed
+# Python 3.10+ installed (3.12 tested)
 python --version
 
 # Node.js and npm installed
@@ -95,7 +95,7 @@ python -m pip install -r tools/requirements.txt --upgrade
 
 ---
 
-## Step 3: Test Executables (Optional)
+## Step 3: Verify Executables Before Distribution
 
 You can test an executable directly:
 
@@ -106,15 +106,25 @@ dist/5_sec_downloader.exe --help
 # Or run it with arguments
 dist/5_sec_downloader.exe input.csv output_folder 3 5 2 5
 
-# Download at the largest available height up to 4K (1080p sources stay 1080p)
-dist/5_sec_downloader.exe input.csv output_folder --resolution 2160
+# Require 1080p and compare sources up to 4K
+dist/5_sec_downloader.exe input.csv output_folder --min-quality 1080 --max-quality 2160
+
+# Inspect the frozen executable identity/capabilities
+dist/5_sec_downloader.exe --capabilities-json
 ```
 
-The resolution flag defaults to `auto`, preserving the previous selection policy. Allowed
-explicit values are `360`, `480`, `720`, `1080`, `1440`, and `2160`. Existing
-positional arguments, including the stop flag path after the four sleep values,
-retain their order. Rebuild the downloader executable whenever its Python source
-changes, and package the rebuilt executable with the matching UI.
+New calls default to strict 1080p minimum/maximum. `--max-quality auto` removes
+the maximum and retains the minimum. `--resolution` is a compatibility alias for
+the maximum: explicit values derive a minimum of `min(1080, maximum)` when no
+minimum is supplied. Existing positional argument order is preserved. Conflicting
+minimum/maximum settings fail before extraction. Quality uses the shorter dimension.
+
+Set `YVC_PYTHON` to the build interpreter when `python` is not on PATH. Set
+`YVC_GIT` to Git's executable when building from a shell without Git on PATH.
+The builder checks yt-dlp 2026.8.19, EJS 0.8.0, and PyInstaller 6.22.3. Use
+`node build-executables.js --media-only` for the downloader and shared trimmer,
+or `--downloader-only` after a downloader-only source change. Do not compile
+manually without the build manifest; the app rejects stale/mismatched binaries.
 
 All resolution settings now encode the requested range as H.264 High / 8-bit
 SDR video with AAC in MP4. HLG/PQ sources are tone mapped to BT.709 SDR, using a
@@ -125,19 +135,28 @@ CDNs that reject direct ffprobe requests are checked through a temporary,
 lossless one-second FFmpeg range sample. The sample is removed after probing,
 and its color policy is cached for subsequent timestamps in that session.
 
-To rebuild just this tool from the project directory:
+Rebuild and verify from the project directory with pinned dependencies installed:
 
-```bash
-python -m PyInstaller --noconfirm --clean --onefile --collect-all yt_dlp_ejs --distpath dist --specpath dist --workpath dist/build tools/5_sec_downloader.py
+```powershell
+node build-executables.js --media-only
+python -m unittest discover -s tests -p 'test*.py'
+node --test tests/*.js
+python tools/verify_downloader_release.py dist/5_sec_downloader.exe ../.build-venv/quality-release-smoke
+npm run make
 ```
 
-Run downloader regression tests with the pinned Python dependencies installed:
+The smoke script uses real HD, portrait, and low-resolution media over localhost.
+It tests strict rejection, verified reuse, conflicting inputs, and final exit/summary
+behavior through the actual executable. The app's source-digest/hash check must
+also pass before packaging. Runtime executables/manifests are staged under
+`.runtime/dist`; Forge copies these to packaged `resources/dist`, excluding build
+intermediates. `release-manifest.json` records executable hashes and build identity.
 
-```bash
-python tests/test_5_sec_downloader.py
-python tests/test_downloader_encoding.py
-node --test tests/test_downloader_options.js tests/test_downloader_summary.js tests/test_frozen_streaming.js
-```
+A clip has at most four application attempts and one 403 refresh per profile, with
+a 180-second operation budget. External media/JS processes are terminated on Stop
+or deadline. An in-flight extraction network request may take up to its configured
+10-second socket timeout to return. Runtime FFmpeg/FFprobe and Node 22+/Deno remain
+prerequisites; a Python installation is not needed by the packaged application.
 
 `test_downloader_encoding.py` generates SDR, 10-bit SDR, HLG, PQ, and WebM
 fixtures and serves them only on localhost. It exercises the real pinned
@@ -150,7 +169,7 @@ rebuilt executable; small synthetic fixtures alone do not verify 4K playback.
 
 ## Step 4: Build Your Electron App
 
-Now build your Electron app. The `dist/` folder will be automatically included:
+Now build your Electron app. The staged `.runtime/dist` executables/manifests will be included under `resources/dist`:
 
 ```bash
 npm run make

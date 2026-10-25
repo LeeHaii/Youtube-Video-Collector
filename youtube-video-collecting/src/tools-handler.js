@@ -14,6 +14,8 @@ const clipSleepMaxInput = document.getElementById('clip-sleep-max');
 const rowSleepMinInput = document.getElementById('row-sleep-min');
 const rowSleepMaxInput = document.getElementById('row-sleep-max');
 const downloaderResolutionInput = document.getElementById('downloader-resolution');
+const downloaderMinimumInput = document.getElementById('downloader-minimum');
+const downloaderReplaceInput = document.getElementById('downloader-replace-existing');
 const downloaderLog = document.getElementById('downloader-log');
 const startBtn = document.getElementById('downloader-start-btn');
 const stopBtn = document.getElementById('downloader-stop-btn');
@@ -55,18 +57,30 @@ window.electronAPI.onDownloadLog?.((message) => {
   }
 });
 
+window.electronAPI.onDownloadClipResult?.((record) => {
+  const dimensions = record.outputDimensions;
+  const detail = record.status === 'OK' && dimensions
+    ? `${dimensions[0]}×${dimensions[1]} at ${record.encoding.fps} fps${record.reused ? ' (verified existing clip)' : ''}`
+    : `${record.status}: ${record.message || 'Requested quality could not be delivered'}`;
+  logDownloader(`Clip ${record.row}.${record.pair}.${record.clip}: ${detail}`);
+});
+
 // Setup download complete listener
 window.electronAPI.onDownloadComplete?.((completion) => {
   downloaderResolutionInput.disabled = false;
+  downloaderMinimumInput.disabled = false;
+  downloaderReplaceInput.disabled = false;
   console.log('✅ [Download Complete]:', completion);
   if (startBtn && stopBtn && downloaderLog) {
     const result = typeof completion === 'boolean' ? { success: completion } : (completion || {});
     const summary = result.summary || {};
     const timestamp = new Date().toLocaleTimeString();
-    if (result.success) {
-      downloaderLog.textContent += `[${timestamp}] ✅ Download completed successfully!\n`;
+    if (result.protocolFailure) {
+      downloaderLog.textContent += `[${timestamp}] ❌ Download result could not be verified. Do not treat this run as complete; keep the output run report for diagnosis.\n`;
+    } else if (result.success) {
+      downloaderLog.textContent += `[${timestamp}] ✅ Download completed: ${summary.succeeded} clip(s) met the requested quality.\n`;
     } else if (result.partial) {
-      downloaderLog.textContent += `[${timestamp}] ⚠️ Download completed with ${summary.failedCount ?? 'some'} failed clip(s). Use “Extract Failed Clips” to retry only those clips.\n`;
+      downloaderLog.textContent += `[${timestamp}] ⚠️ ${summary.succeeded ?? 0} met quality; ${summary.qualityUnavailableCount ?? 0} quality unavailable; ${summary.failedCount ?? 'some'} total failed. Use “Extract Failed Clips” and keep its quality settings file.\n`;
     } else if (result.canceled) {
       downloaderLog.textContent += `[${timestamp}] ⏹️ Download stopped by user.\n`;
     } else {
@@ -198,6 +212,12 @@ startBtn.addEventListener('click', () => {
   const rowSleepMin = parseFloat(rowSleepMinInput.value) || 10;
   const rowSleepMax = parseFloat(rowSleepMaxInput.value) || 15;
   const resolution = downloaderResolutionInput.value;
+  const minimum = downloaderMinimumInput.value || '1080';
+  const replaceExisting = downloaderReplaceInput.checked;
+  if (resolution !== 'auto' && Number(minimum) > Number(resolution)) {
+    logDownloader('❌ Minimum quality cannot exceed maximum quality. Adjust the quality settings.');
+    return;
+  }
 
   console.log('🔵 Start Download button clicked');
   console.log('   CSV Path:', csvPath);
@@ -218,16 +238,18 @@ startBtn.addEventListener('click', () => {
   }
 
   clearDownloaderLog();
-  logDownloader(`🚀 Starting 5-Sec Download — maximum video height: ${resolution === 'auto' ? 'Auto (current behavior)' : `${resolution}p`}`);
+  logDownloader(`🚀 Starting 5-Sec Download — strict quality: minimum ${minimum}p, maximum ${resolution === 'auto' ? 'best available' : `${resolution}p`}`);
   if (errorExtractionContainer) errorExtractionContainer.style.display = 'none';
   startBtn.disabled = true;
   stopBtn.disabled = false;
   stopBtn.textContent = 'Stop';
   downloaderResolutionInput.disabled = true;
+  downloaderMinimumInput.disabled = true;
+  downloaderReplaceInput.disabled = true;
 
   // Call IPC to start download
   console.log('📤 Calling window.electronAPI.startDownload()');
-  window.electronAPI.startDownload(csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, resolution)
+  window.electronAPI.startDownload(csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, resolution, minimum, replaceExisting)
     .then((result) => {
       console.log('✅ startDownload IPC returned:', result);
       if (!result.success) {
@@ -235,6 +257,8 @@ startBtn.addEventListener('click', () => {
         startBtn.disabled = false;
         stopBtn.disabled = true;
         downloaderResolutionInput.disabled = false;
+  downloaderMinimumInput.disabled = false;
+  downloaderReplaceInput.disabled = false;
       }
     })
     .catch((err) => {
@@ -243,6 +267,8 @@ startBtn.addEventListener('click', () => {
       startBtn.disabled = false;
       stopBtn.disabled = true;
       downloaderResolutionInput.disabled = false;
+  downloaderMinimumInput.disabled = false;
+  downloaderReplaceInput.disabled = false;
     });
 });
 

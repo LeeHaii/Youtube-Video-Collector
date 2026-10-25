@@ -1,7 +1,7 @@
 {
   "name": "rhymx-youtube-ultimate-tool",
   "productName": "Rhymx's Youtube Ultimate Tool",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Ultimate tool for collecting YouTube video, downloading videos, and Capcut automation",
   "main": "src/index.js",
   "private": true,
@@ -11,7 +11,8 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\"",
-    "build-exe": "node build-executables.js"
+    "build-exe": "node build-executables.js",
+    "test:downloader": "node --test tests/test_downloader_options.js tests/test_downloader_summary.js tests/test_downloader_runtime.js"
   },
   "keywords": [],
   "author": {

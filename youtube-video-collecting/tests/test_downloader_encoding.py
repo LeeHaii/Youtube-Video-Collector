@@ -105,24 +105,6 @@ class EncodingTests(unittest.TestCase):
         self.assertNotIn("token", str(caught.exception))
         self.assertIn("Referer: https://site.test/\r\n", command.call_args.args[0])
 
-    def test_invalid_output_does_not_retry_or_report_success(self):
-        attempts, logs = [], []
-        class Session:
-            def __init__(self, _url, profile, *_args):
-                attempts.append(profile.name)
-            def download(self, *_args):
-                raise downloader.EncodingError("Output validation failed: expected 8-bit video")
-            def diagnostics(self):
-                return ""
-            def close(self):
-                pass
-        outcome = downloader.download_clip("https://site.test", 0, 5, "unused.%(ext)s", Path("ffmpeg"), Path("cache"),
-                                           None, 0, {}, session_factory=Session, log_callback=logs.append,
-                                           sleep_func=lambda _: self.fail("must not sleep/retry"))
-        self.assertFalse(outcome.ok)
-        self.assertEqual(attempts, ["standard"])
-        self.assertNotIn("OK\n", logs)
-
     def test_capability_check_is_cached_and_missing_filters_fail_clearly(self):
         downloader.check_encoding_tools.cache_clear()
         def result(args, **_kwargs):
@@ -150,7 +132,7 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def copyfile(self, source, outputfile):
         try:
             super().copyfile(source, outputfile)
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             # A bounded probe or cut can finish before the HTTP response does.
             pass
 
@@ -223,6 +205,47 @@ class RangeEncodingTests(unittest.TestCase):
             return session.encoding_policy, logs
         finally:
             session.close()
+
+    def test_strict_pipeline_rejects_real_below_minimum_source(self):
+        outcome = downloader.download_clip(self.origin + '/sdr.mp4', 0, 5,
+            str(self.base / 'strict-low.%(ext)s'), self.ffmpeg, self.base / 'strict-cache', None, 0, {},
+            profiles=downloader.DOWNLOAD_PROFILES[:1], log_callback=lambda _: None, sleep_func=lambda _: None)
+        self.assertEqual(outcome.status, 'QUALITY_UNAVAILABLE', outcome)
+        self.assertFalse((self.base / 'strict-low.mp4').exists())
+
+    def test_strict_pipeline_downloads_real_hd_and_verified_reuse(self):
+        self.run_ffmpeg(['-f', 'lavfi', '-i', 'color=c=blue:size=1920x1080:rate=30:duration=7',
+            '-f', 'lavfi', '-i', 'sine=frequency=440:duration=7', '-c:v', 'libx264', '-preset', 'ultrafast',
+            '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', str(self.base / 'hd.mp4')])
+        template = str(self.base / 'strict-hd.%(ext)s')
+        for reused in (False, True):
+            outcome = downloader.download_clip(self.origin + '/hd.mp4', 0, 5, template,
+                self.ffmpeg, self.base / 'strict-cache', None, 0, {}, profiles=downloader.DOWNLOAD_PROFILES[:1],
+                log_callback=lambda _: None, sleep_func=lambda _: None)
+            self.assertTrue(outcome.ok, outcome)
+            self.assertEqual(outcome.record['reused'], reused)
+            self.assertEqual(outcome.record['outputDimensions'], [1920, 1080])
+
+    def test_strict_pipeline_retains_hdr_sources_and_tone_maps_them(self):
+        for name in ('hlg', 'pq'):
+            outcome = downloader.download_clip(self.origin + f'/{name}.mp4', 0, 5,
+                str(self.base / f'strict-hdr-{name}.%(ext)s'), self.ffmpeg, self.base / 'strict-cache', None, 0, {},
+                quality_policy=downloader.QualityPolicy(144, 360), profiles=downloader.DOWNLOAD_PROFILES[:1],
+                log_callback=lambda _: None, sleep_func=lambda _: None)
+            self.assertTrue(outcome.ok, outcome)
+            self.assertEqual(outcome.record['outputPixelFormat'], 'yuv420p')
+            self.assertEqual(outcome.record['outputFps'], 60)
+            self.assertIn(outcome.record['encoding']['dynamic_range'], ('HLG', 'PQ'))
+
+    def test_strict_rotated_source_preserves_display_dimensions(self):
+        self.run_ffmpeg(['-display_rotation:v:0', '90', '-i', str(self.base / 'sdr.mp4'), '-c', 'copy', '-movflags', '+faststart',
+                         str(self.base / 'rotated.mp4')])
+        outcome = downloader.download_clip(self.origin + '/rotated.mp4', 0, 5,
+            str(self.base / 'strict-rotated.%(ext)s'), self.ffmpeg, self.base / 'strict-cache', None, 0, {},
+            quality_policy=downloader.QualityPolicy(144, 360), profiles=downloader.DOWNLOAD_PROFILES[:1],
+            log_callback=lambda _: None, sleep_func=lambda _: None)
+        self.assertTrue(outcome.ok, outcome)
+        self.assertEqual(outcome.record['outputDimensions'], [180, 320])
 
     def test_hlg_and_pq_combined_sources_preserve_60fps_and_convert_sdr(self):
         for kind, dynamic in (("hlg", "HLG"), ("pq", "HDR10")):

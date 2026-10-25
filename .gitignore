@@ -133,3 +133,6 @@ pids/
 # Coverage
 coverage/
 .nyc_output/
+
+# Staged runtime resources (executables/manifests only)
+youtube-video-collecting/.runtime/

@@ -43,8 +43,8 @@ Turn collected timestamps into actual video clips.
 * Downloads a 5-second section from every timestamp
 * Supports multiple videos and timestamps per row
 * Downloads targeted ranges instead of intentionally downloading the complete source first
-* Maximum video height selection from 360p through 2160p (4K), with Auto retaining the previous resolution policy
-* Selects the highest available resolution within the chosen limit, without upscaling
+* Separate minimum accepted quality and maximum quality; strict 1080p defaults, with a Best available maximum
+* Compares combined/separate streams across delivery profiles, handles portrait tiers, and refuses silent retry downgrades
 * MP4 output with 8-bit H.264 High video and AAC audio; HDR sources are tone mapped to SDR
 * Preserves the source frame rate, including 4K at 60 fps
 * FFmpeg processing and output validation
@@ -543,15 +543,22 @@ Input CSV
 Output Folder
 ```
 
-Choose **Maximum video height**: Auto (the existing download behavior), 360p,
-480p, 720p, 1080p, 1440p, or 2160p (4K). Explicit choices use the largest available
-height within the limit. Selecting 4K for a video that tops out at 1080p downloads
-1080p; selecting 720p for a 480p source downloads 480p without upscaling.
+Choose **Minimum accepted quality** and **Maximum quality**. Both default to
+1080p. Best available removes the maximum while retaining your minimum. Quality
+uses the shorter dimension: 1920×1080 and 1080×1920 both count as 1080p.
 
-Portrait videos are limited by pixel height too. If none of the delivery profiles
-offers a known video height within an explicit limit, that clip is reported as a
-format failure and can be exported for retry. The choice stays fixed until the
-current run finishes or stops.
+A clip must meet the minimum and preserve its selected quality through retries.
+If the tool cannot recover that quality, it reports a failure instead of silently
+delivering a lower-quality clip. For a genuinely 480p original, explicitly choose
+a minimum of 480p or lower; there is no upscaling. A 2160p maximum can still select
+1080p when that is the best exposed source and the minimum permits it.
+
+Use a fresh output folder for the first run with this release. Existing files are
+reused only with matching provenance, hash, and media validation. Older files
+without a `.quality.json` sidecar cause an output conflict. Enable **Replace
+existing clips** explicitly to replace them after a new download validates.
+Keep the `.quality.json` companion beside an exported retry CSV; the original
+quality settings and locked targets must be retained for retries.
 
 Configure optional delays:
 
@@ -585,10 +592,12 @@ Downloaded range:
 
 The downloader uses `yt-dlp` range downloading and FFmpeg processing.
 
-Choose **Maximum video height** before starting a download. Choosing 4K for a
-video whose maximum is 1080p produces a 1080p clip. The limit applies to pixel
-height, including portrait videos. Auto retains the previous source-selection
-policy; the output encoding fix applies to every resolution setting.
+Quality selection compares eligible combined and separate streams across supported
+delivery profiles. The selected tier/frame rate is retained for repeated occurrences
+of the same video in the run. Each clip emits a result and each run writes JSONL
+records plus a quality/summary file in the output directory. The app verifies its
+compiled downloader's build identity before starting and validates the final report
+before showing success.
 
 The downloader produces MP4 files with H.264 High / 8-bit `yuv420p` video and
 AAC audio. It checks the selected stream's actual color tags once per cached
