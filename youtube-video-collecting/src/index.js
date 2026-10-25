@@ -3,8 +3,7 @@ const path = require('node:path');
 const fs = require('fs');
 const { spawn, execFile, execSync } = require('child_process');
 const os = require('os');
-const { ElectronBlocker } = require('@cliqz/adblocker-electron');
-const fetch = require('node-fetch');
+const { UBlockOrigin } = require('./ublock-origin');
 const { CollectorBridge } = require('./collector-bridge');
 const { registerNativeHost, unregisterNativeHost } = require('./native-host-registration');
 const { validateDownloadResolution, validateDownloadPolicy, buildDownloadArguments } = require('./downloader-options');
@@ -46,28 +45,6 @@ let ageRestrictionErrors = [];  // Track age restriction errors: {url, timestamp
 let failedDownloadErrors = [];  // Track every failed clip, including YouTube 403s
 let latestDownloadSummary = null;
 let currentInputCsvPath = '';  // Store input CSV path for error extraction
-
-// ============================================================================
-// UBLOCK ORIGIN ADBLOCKER SETUP
-// ============================================================================
-
-let blocker = null;
-
-async function initializeAdblocker() {
-  try {
-    console.log('🔒 Initializing uBlock Origin adblocker...');
-    
-    // Create blocker instance with uBlock0 filters (ads + tracking)
-    blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch);
-    
-    console.log('✅ uBlock Origin loaded successfully');
-    return true;
-  } catch (error) {
-    console.warn('⚠️ Adblocker initialization warning (app will continue without ad-blocking):', error.message);
-    // Don't fail completely - app can work without adblocker
-    return false;
-  }
-}
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -161,6 +138,10 @@ const createWindow = () => {
     },
   });
 
+  mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
+    ublock.attachViewer(guest, mainWindow);
+  });
+
   // and load the index.html of the app.
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
@@ -196,20 +177,29 @@ const createWindow = () => {
   // Open the DevTools.
   //mainWindow.webContents.openDevTools();
 
-  // Enable adblocker for this window
-  // DISABLED: uBlock causes issues with YouTube embeds (153 error)
-  // The adblocker was having issues anyway (fetch is not a function error)
-  // if (blocker) {
-  //   console.log('🔒 Enabling uBlock Origin for main window...');
-  //   blocker.enableBlockingInSession(mainWindow.webContents.session);
-  // }
-
   return mainWindow;
 };
 
 let mainWindow;
+let ublock;
+let ublockReady;
 let collectorBridge;
 const collectorOpenRequests = new Map();
+
+ipcMain.handle('ublock-status', async (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized uBlock request');
+  await ublockReady;
+  return ublock.status();
+});
+ipcMain.handle('ublock-install', async (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized uBlock request');
+  return ublock.install();
+});
+ipcMain.handle('ublock-open', async (event, viewerId) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized uBlock request');
+  try { await ublock.open(mainWindow, viewerId); return { success: true }; }
+  catch (error) { return { error: error.message }; }
+});
 
 app.on('second-instance', (_event, argv) => {
   if (process.platform === 'win32' && argv.some((arg) => arg.startsWith('--collector-extension-id='))) {
@@ -259,6 +249,15 @@ app.on('before-quit', () => { void collectorBridge?.close(); });
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
   if (!primaryInstance) return;
+  // Both viewers already share the persistent default session; retain login cookies.
+  // Do not attach Electron webRequest blockers: those override extension listeners.
+  ublock = new UBlockOrigin({
+    session: session.defaultSession,
+    directory: path.join(app.getPath('userData'), 'extensions', 'ublock-origin'),
+    bundledDirectory: app.isPackaged ? path.join(process.resourcesPath, 'ublock-origin')
+      : path.join(__dirname, '..', '.runtime', 'ublock-origin'),
+  });
+  ublockReady = ublock.load();
   if (process.platform === 'win32') {
     try {
       const config = registerNativeHost(app);
@@ -266,9 +265,6 @@ app.whenReady().then(async () => {
       await collectorBridge.start();
     } catch (error) { console.warn('Collector browser bridge:', error.message); }
   }
-  // Browser delivery must not wait for a remote filter download.
-  void initializeAdblocker();
-
   console.log('🚀 Creating main application window...');
   mainWindow = createWindow();
   mainWindow.webContents.on('did-start-loading', () => collectorBridge?.setReady(false));

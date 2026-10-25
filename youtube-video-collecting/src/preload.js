@@ -5,6 +5,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // Expose safe APIs to the renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
+  getUBlockStatus: () => ipcRenderer.invoke('ublock-status'),
+  installUBlock: () => ipcRenderer.invoke('ublock-install'),
+  openUBlock: (viewerId) => ipcRenderer.invoke('ublock-open', viewerId),
   // YouTube Collector - Export CSV
   exportCSV: (rows) => ipcRenderer.invoke('export-csv', rows),
 

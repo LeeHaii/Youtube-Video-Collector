@@ -908,6 +908,12 @@ body {
   border-color: #999;
 }
 
+.yt-nav-btn[data-ublock-viewer] {
+  width: auto;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
 .yt-nav-btn:active {
   background-color: #ddd;
 }

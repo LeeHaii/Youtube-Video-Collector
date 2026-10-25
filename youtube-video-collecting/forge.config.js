@@ -13,6 +13,8 @@ module.exports = {
     ignore: [/^\/dist(?:\/|$)/, /^\/out(?:\/|$)/, /^\/\.runtime(?:\/|$)/],
     extraResource: [
       './.runtime/dist',
+      ...(fs.existsSync(path.join(__dirname, '.runtime', 'ublock-origin', 'manifest.json'))
+        ? ['./.runtime/ublock-origin'] : []),
     ],
   },
   hooks: {

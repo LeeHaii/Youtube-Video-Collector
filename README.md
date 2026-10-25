@@ -33,6 +33,10 @@ Watch YouTube inside the application and quickly collect important timestamps.
 
 See [Collector Links setup](youtube-video-collecting/extension/README.md) for extension installation and connection checks.
 
+The embedded Collector and Trimmer also support the official uBlock Origin
+extension. See [uBlock Origin setup](youtube-video-collecting/UBLOCK_SETUP.md)
+for installation, controls, packaging, and third-party licenses.
+
 ---
 
 ### ⬇️ 5-Sec Downloader

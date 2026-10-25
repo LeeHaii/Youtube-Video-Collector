@@ -31,10 +31,11 @@
               <button id="yt-back-btn" class="yt-nav-btn" title="Go back">←</button>
               <button id="yt-forward-btn" class="yt-nav-btn" title="Go forward">→</button>
               <button id="yt-refresh-btn" class="yt-nav-btn" title="Refresh page">⟳</button>
+              <button class="yt-nav-btn" data-ublock-viewer="youtube-webview" title="Open uBlock Origin controls" disabled>uBlock</button>
               <input type="text" id="yt-url-field" class="yt-url-input" readonly placeholder="Loading..." />
             </div>
             <!-- YouTube WebView -->
-            <webview id="youtube-webview" src="https://www.youtube.com"
+            <webview id="youtube-webview" src="about:blank"
               sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation">
             </webview>
           </div>
@@ -237,8 +238,9 @@
         <div class="trimmer-layout">
           <div class="trimmer-left">
             <label class="form-label">Video Preview</label>
+            <button class="btn-secondary" data-ublock-viewer="trimmer-webview" disabled>uBlock Origin controls</button>
             <div class="trimmer-webview-container">
-              <webview id="trimmer-webview" src="https://www.youtube.com"
+              <webview id="trimmer-webview" src="about:blank"
                 sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation">
               </webview>
             </div>
@@ -583,6 +585,13 @@
       </div>
 
       <div class="settings-modal-body">
+        <div class="settings-section">
+          <label class="settings-label">YouTube ad blocking</label>
+          <p id="ublock-status" role="status" aria-live="polite">Checking uBlock Origin…</p>
+          <button id="ublock-install-btn" class="settings-btn-secondary" disabled>Install uBlock Origin</button>
+          <button id="ublock-settings-btn" class="settings-btn-secondary" disabled>uBlock settings</button>
+          <p class="settings-hint">Installs the official uBlock Origin extension from GitHub. Its filter lists update automatically.</p>
+        </div>
         <!-- Autosave Interval Setting -->
         <div class="settings-section">
           <label class="settings-label">Auto-save Interval (minutes):</label>
@@ -634,6 +643,7 @@
   <script src="collector-navigation.js"></script>
   <script src="renderer.js"></script>
   <script src="tools-handler.js"></script>
+  <script src="ublock-controls.js"></script>
 </body>
 
 </html>
