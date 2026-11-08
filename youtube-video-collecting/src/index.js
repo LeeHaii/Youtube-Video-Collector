@@ -3,17 +3,21 @@ const path = require('node:path');
 const fs = require('fs');
 const { spawn, execFile, execSync } = require('child_process');
 const os = require('os');
-const { ElectronBlocker } = require('@cliqz/adblocker-electron');
-const fetch = require('node-fetch');
+const { UBlockOrigin } = require('./ublock-origin');
 const { CollectorBridge } = require('./collector-bridge');
 const { registerNativeHost, unregisterNativeHost } = require('./native-host-registration');
-const { validateDownloadResolution, buildDownloadArguments } = require('./downloader-options');
+const { validateDownloadResolution, validateDownloadPolicy, buildDownloadArguments } = require('./downloader-options');
 const {
   buildDownloadErrorSummary,
   consumeDownloaderStdout,
   createDownloadParseState,
   mergeErrorsForCsv,
+  validateDownloadCompletion,
+  buildRetryPolicy,
 } = require('./downloader-summary');
+
+const { verifyDownloader } = require('./downloader-runtime');
+const { StringDecoder } = require('node:string_decoder');
 
 // Suppress MaxListenersExceededWarning
 require('events').EventEmitter.defaultMaxListeners = 15;
@@ -33,34 +37,14 @@ if (!primaryInstance) {
 
 // Store download process and error tracking
 let downloadProcess = null;
+let downloadStarting = false;
+let latestDownloadRetryPolicy = null;
 let downloadStopFlagPath = null;  // Path to stop flag file for graceful shutdown
 let rateLimitErrors = [];  // Track rate limit errors: {url, timestamps}
 let ageRestrictionErrors = [];  // Track age restriction errors: {url, timestamps}
 let failedDownloadErrors = [];  // Track every failed clip, including YouTube 403s
 let latestDownloadSummary = null;
 let currentInputCsvPath = '';  // Store input CSV path for error extraction
-
-// ============================================================================
-// UBLOCK ORIGIN ADBLOCKER SETUP
-// ============================================================================
-
-let blocker = null;
-
-async function initializeAdblocker() {
-  try {
-    console.log('🔒 Initializing uBlock Origin adblocker...');
-    
-    // Create blocker instance with uBlock0 filters (ads + tracking)
-    blocker = await ElectronBlocker.fromPrebuiltAdsAndTracking(fetch);
-    
-    console.log('✅ uBlock Origin loaded successfully');
-    return true;
-  } catch (error) {
-    console.warn('⚠️ Adblocker initialization warning (app will continue without ad-blocking):', error.message);
-    // Don't fail completely - app can work without adblocker
-    return false;
-  }
-}
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -154,6 +138,10 @@ const createWindow = () => {
     },
   });
 
+  mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
+    ublock.attachViewer(guest, mainWindow);
+  });
+
   // and load the index.html of the app.
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
@@ -189,20 +177,29 @@ const createWindow = () => {
   // Open the DevTools.
   //mainWindow.webContents.openDevTools();
 
-  // Enable adblocker for this window
-  // DISABLED: uBlock causes issues with YouTube embeds (153 error)
-  // The adblocker was having issues anyway (fetch is not a function error)
-  // if (blocker) {
-  //   console.log('🔒 Enabling uBlock Origin for main window...');
-  //   blocker.enableBlockingInSession(mainWindow.webContents.session);
-  // }
-
   return mainWindow;
 };
 
 let mainWindow;
+let ublock;
+let ublockReady;
 let collectorBridge;
 const collectorOpenRequests = new Map();
+
+ipcMain.handle('ublock-status', async (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized uBlock request');
+  await ublockReady;
+  return ublock.status();
+});
+ipcMain.handle('ublock-install', async (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized uBlock request');
+  return ublock.install();
+});
+ipcMain.handle('ublock-open', async (event, viewerId) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized uBlock request');
+  try { await ublock.open(mainWindow, viewerId); return { success: true }; }
+  catch (error) { return { error: error.message }; }
+});
 
 app.on('second-instance', (_event, argv) => {
   if (process.platform === 'win32' && argv.some((arg) => arg.startsWith('--collector-extension-id='))) {
@@ -252,6 +249,15 @@ app.on('before-quit', () => { void collectorBridge?.close(); });
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
   if (!primaryInstance) return;
+  // Both viewers already share the persistent default session; retain login cookies.
+  // Do not attach Electron webRequest blockers: those override extension listeners.
+  ublock = new UBlockOrigin({
+    session: session.defaultSession,
+    directory: path.join(app.getPath('userData'), 'extensions', 'ublock-origin'),
+    bundledDirectory: app.isPackaged ? path.join(process.resourcesPath, 'ublock-origin')
+      : path.join(__dirname, '..', '.runtime', 'ublock-origin'),
+  });
+  ublockReady = ublock.load();
   if (process.platform === 'win32') {
     try {
       const config = registerNativeHost(app);
@@ -259,9 +265,6 @@ app.whenReady().then(async () => {
       await collectorBridge.start();
     } catch (error) { console.warn('Collector browser bridge:', error.message); }
   }
-  // Browser delivery must not wait for a remote filter download.
-  void initializeAdblocker();
-
   console.log('🚀 Creating main application window...');
   mainWindow = createWindow();
   mainWindow.webContents.on('did-start-loading', () => collectorBridge?.setReady(false));
@@ -486,13 +489,25 @@ ipcMain.handle('get-autosave-path', async (event) => {
 });
 
 // 5-Sec Downloader - Start Download
-ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, resolution = 'auto') => {
+ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, resolution = '1080', minimum, replaceExisting = false) => {
+  let ownsStart = false;
   try {
-    if (downloadProcess && downloadProcess.exitCode === null) {
+    if (downloadStarting || (downloadProcess && downloadProcess.exitCode === null)) {
       return { success: false, error: 'A download is already running or stopping. Please wait for it to finish.' };
     }
 
+    downloadStarting = true;
+    ownsStart = true;
     const selectedResolution = validateDownloadResolution(resolution);
+    const policy = validateDownloadPolicy(selectedResolution, minimum, replaceExisting);
+    const companion = csvPath + '.quality.json';
+    if (fs.existsSync(companion)) {
+      const saved = JSON.parse(fs.readFileSync(companion, 'utf8'));
+      const keys = Object.keys(policy);
+      if (saved.schemaVersion !== 2 || keys.some((key) => saved.policy?.[key] !== policy[key])) {
+        throw new Error('Retry CSV quality settings differ. Select its original minimum and maximum quality; keep the .quality.json companion beside the CSV.');
+      }
+    }
 
     // Reset error tracking
     rateLimitErrors = [];
@@ -516,6 +531,9 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
       throw new Error(`Executable not found: ${exePath}. Please run "npm run build-exe" first.`);
     }
 
+    const binary = await verifyDownloader(exePath, { sourceDirectory: path.join(__dirname, '..', 'tools') });
+    console.log('Verified downloader build:', binary);
+
     console.log(`🚀 Starting 5-Sec Downloader Executable`);
     console.log(`📄 Executable: ${exePath}`);
     console.log(`📋 CSV: ${csvPath}`);
@@ -531,7 +549,7 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
 
     // Spawn executable process WITHOUT shell to properly handle spaces in paths
     const childProcess = spawn(exePath, buildDownloadArguments(
-      csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, stopFlagPath, selectedResolution,
+      csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, stopFlagPath, selectedResolution, policy.minimum_edge, replaceExisting,
     ), {
       stdio: 'pipe',
       shell: false,
@@ -546,30 +564,41 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
     downloadProcess = childProcess;
 
     const parseState = createDownloadParseState();
+    const stdoutDecoder = new StringDecoder('utf8');
+    const stderrDecoder = new StringDecoder('utf8');
+    const sentClips = new Set();
 
     // Handle errors
     childProcess.on('error', (error) => {
       console.error(`❌ Failed to start download process: ${error.message}`);
       mainWindow.webContents.send('download-log', `❌ ERROR: Failed to start process: ${error.message}\n`);
+      mainWindow.webContents.send('download-complete', { success: false, code: 1, error: error.message });
       if (downloadProcess === childProcess) downloadProcess = null;
     });
 
     // Send output to renderer and parse the downloader's chunk-safe structured report.
     childProcess.stdout.on('data', (data) => {
-      const message = data.toString();
-      console.log(`[Download stdout]: ${message}`);
-      consumeDownloaderStdout(parseState, message);
-      mainWindow.webContents.send('download-log', message);
+      const message = stdoutDecoder.write(data);
+      const visible = consumeDownloaderStdout(parseState, message);
+      if (visible) mainWindow.webContents.send('download-log', visible);
+      for (const [id, record] of parseState.clipResults) {
+        if (!sentClips.has(id)) {
+          sentClips.add(id);
+          mainWindow.webContents.send('download-clip-result', record);
+        }
+      }
     });
 
     childProcess.stderr.on('data', (data) => {
-      const message = data.toString();
+      const message = stderrDecoder.write(data);
       console.error(`[Download stderr]: ${message}`);
       mainWindow.webContents.send('download-log', `ERROR: ${message}`);
     });
 
     childProcess.on('close', (code) => {
-      consumeDownloaderStdout(parseState, '', true);
+      const trailing = consumeDownloaderStdout(parseState, stdoutDecoder.end(), true);
+      if (trailing) mainWindow.webContents.send('download-log', trailing);
+      latestDownloadRetryPolicy = buildRetryPolicy(parseState, policy);
       failedDownloadErrors = parseState.errors;
       rateLimitErrors = failedDownloadErrors.filter((item) => item.category === 'RATE_LIMIT');
       ageRestrictionErrors = failedDownloadErrors.filter((item) => item.category === 'AGE_RESTRICTION');
@@ -579,7 +608,8 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
       console.log('📊 Download summary:', latestDownloadSummary);
       mainWindow.webContents.send('download-error-summary', latestDownloadSummary);
       mainWindow.webContents.send('download-complete', {
-        success: code === 0,
+        success: validateDownloadCompletion(parseState, code, policy),
+        protocolFailure: code === 0 && !validateDownloadCompletion(parseState, code, policy),
         partial: code === 2,
         canceled: code === 3 || latestDownloadSummary.canceled,
         code,
@@ -603,6 +633,8 @@ ipcMain.handle('start-download', async (event, csvPath, outputPath, clipSleepMin
   } catch (error) {
     console.error(`❌ Download error: ${error.message}`);
     return { success: false, error: error.message };
+  } finally {
+    if (ownsStart) downloadStarting = false;
   }
 });
 
@@ -672,6 +704,7 @@ ipcMain.handle('extract-rate-limit-errors', async (event) => {
 
     const csvContent = formatDownloadErrorsCsv(failedDownloadErrors);
     fs.writeFileSync(filePath, csvContent, 'utf-8');
+    if (latestDownloadRetryPolicy) fs.writeFileSync(filePath + '.quality.json', JSON.stringify(latestDownloadRetryPolicy, null, 2), 'utf8');
     console.log(`💾 Failed clips saved to: ${filePath}`);
     return { success: true, filePath };
   } catch (error) {
@@ -720,6 +753,7 @@ ipcMain.handle('extract-age-restriction-errors', async (event) => {
     }
 
     fs.writeFileSync(filePath, csvContent, 'utf-8');
+    if (latestDownloadRetryPolicy) fs.writeFileSync(filePath + '.quality.json', JSON.stringify(latestDownloadRetryPolicy, null, 2), 'utf8');
     console.log(`💾 Age restriction errors saved to: ${filePath}`);
     return { success: true, filePath };
   } catch (error) {

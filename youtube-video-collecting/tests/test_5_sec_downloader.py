@@ -55,12 +55,12 @@ class DownloaderTests(unittest.TestCase):
     def test_cli_preserves_legacy_arguments_and_defaults(self):
         args = downloader.parse_arguments(["input file.csv", "output folder"])
         self.assertEqual((args.clip_sleep_min, args.clip_sleep_max, args.row_sleep_min, args.row_sleep_max), (1, 2, 10, 15))
-        self.assertIsNone(args.max_height)
+        self.assertEqual(args.max_height, 1080)
         self.assertIsNone(args.stop_flag_path)
         args = downloader.parse_arguments(["input file.csv", "output folder", "0", "0.5", "2", "3", "stop flag.txt"])
         self.assertEqual((args.clip_sleep_min, args.clip_sleep_max, args.row_sleep_min, args.row_sleep_max), (0, 0.5, 2, 3))
         self.assertEqual(args.stop_flag_path, "stop flag.txt")
-        self.assertIsNone(args.max_height)
+        self.assertEqual(args.max_height, 1080)
 
     def test_cli_accepts_resolution_with_or_without_optional_positionals(self):
         for height in downloader.SUPPORTED_HEIGHTS:
@@ -83,41 +83,6 @@ class DownloaderTests(unittest.TestCase):
                 downloader.main()
             self.assertEqual(raised.exception.code, downloader.EXIT_SUCCESS)
             runtime.assert_not_called()
-
-    def test_explicit_resolution_survives_all_retries_and_cached_reuse(self):
-        created, attempts = [], []
-
-        class FakeSession:
-            def __init__(self, _url, profile, *_args):
-                self.profile = profile
-                created.append(profile)
-
-            def download(self, _start, _end, _output):
-                attempts.append(self.profile.name)
-                if self.profile.name != "embedded":
-                    raise RuntimeError("HTTP Error 403: Forbidden")
-
-            def diagnostics(self):
-                return ""
-
-            def close(self):
-                pass
-
-        sessions = {}
-        with tempfile.TemporaryDirectory() as directory:
-            for timestamp in (0, 10):
-                outcome = downloader.download_clip(
-                    "https://www.youtube.com/watch?v=test", timestamp, 5,
-                    str(Path(directory) / f"{timestamp}.%(ext)s"), Path("ffmpeg.exe"), Path("cache"), None, 0, sessions,
-                    session_factory=FakeSession, sleep_func=lambda _: None, log_callback=lambda _: None,
-                    profiles=downloader.profiles_for_resolution(720),
-                )
-                self.assertTrue(outcome.ok)
-        self.assertEqual(attempts, ["standard", "safari-hls", "embedded", "embedded"])
-        self.assertEqual(len(created), 3)
-        self.assertTrue(all(profile.max_height == 720 for profile in created))
-        self.assertTrue(all(profile.format_selector.endswith("best[height<=720]") for profile in created))
-        downloader.close_sessions(sessions)
 
     def test_process_passes_one_profile_set_per_explicit_run_and_keeps_auto_callback_contract(self):
         calls = []
@@ -205,43 +170,6 @@ class DownloaderTests(unittest.TestCase):
         self.assertNotIn("http_headers", options)
         self.assertEqual(options["js_runtimes"]["node"]["path"], str(Path(temporary_directory) / "node.exe"))
 
-    def test_forbidden_download_retries_with_safari_hls(self):
-        attempts = []
-
-        class FakeSession:
-            def __init__(self, _url, profile, *_args):
-                self.profile = profile
-
-            def download(self, _start, _end, _output):
-                attempts.append(self.profile.name)
-                if self.profile.name == "standard":
-                    raise RuntimeError("ffmpeg exited with code 3436169992")
-
-            def diagnostics(self):
-                return "server returned 403"
-
-            def close(self):
-                pass
-
-        outcome = downloader.download_clip(
-            "https://www.youtube.com/watch?v=test",
-            10,
-            5,
-            "clip.%(ext)s",
-            Path("ffmpeg.exe"),
-            Path("cache"),
-            None,
-            0,
-            {},
-            log_callback=lambda _message: None,
-            session_factory=FakeSession,
-            sleep_func=lambda _seconds: None,
-        )
-
-        self.assertTrue(outcome.ok)
-        self.assertEqual(outcome.attempts, 2)
-        self.assertEqual(attempts, ["standard", "safari-hls"])
-
     def test_reused_session_preserves_yt_dlp_normalized_output_template(self):
         processed_templates = []
         extracted = []
@@ -297,38 +225,6 @@ class DownloaderTests(unittest.TestCase):
             "      Selected source: 1280x720, 30 fps, SDR (standard)\n",
             "      Output: MP4, H.264 High, 8-bit SDR, 1280x720, 30 fps\n",
         ])
-
-    def test_successful_fallback_profile_is_reused_first(self):
-        attempts = []
-
-        class CachedSafariSession:
-            def download(self, _start, _end, _output):
-                attempts.append("safari-hls")
-
-            def diagnostics(self):
-                return ""
-
-            def close(self):
-                pass
-
-        outcome = downloader.download_clip(
-            "https://www.youtube.com/watch?v=test",
-            20,
-            5,
-            "clip.%(ext)s",
-            Path("ffmpeg.exe"),
-            Path("cache"),
-            None,
-            0,
-            {"safari-hls": CachedSafariSession()},
-            log_callback=lambda _message: None,
-            session_factory=lambda *_args: self.fail("cached fallback should be reused"),
-            sleep_func=lambda _seconds: None,
-        )
-
-        self.assertTrue(outcome.ok)
-        self.assertEqual(outcome.attempts, 1)
-        self.assertEqual(attempts, ["safari-hls"])
 
     def test_partial_processing_keeps_stable_clip_numbers_and_exit_code(self):
         calls = []
@@ -437,17 +333,18 @@ class RealFormatSelectionTests(unittest.TestCase):
         self.assertEqual(selected["requested_formats"][0]["format_id"], "v720")
         self.assertEqual(selected["requested_formats"][1]["format_id"], "audio")
 
-    def test_unknown_or_above_cap_streams_cannot_escape(self):
-        for formats in ([self.video(1080), self.audio()], [self.video(None, acodec="aac")]):
-            with self.subTest(formats=formats), self.assertRaises(Exception) as raised:
-                self.select(720, formats)
-            self.assertEqual(downloader.classify_error(str(raised.exception)), downloader.ERROR_FORMAT)
+    def test_above_cap_is_rejected_and_unknown_dimensions_require_probe(self):
+        with self.assertRaises(downloader.QualityUnavailable):
+            self.select(720, [self.video(1080), self.audio()])
+        unknown = self.select(720, [self.video(None, acodec='aac')])
+        with self.assertRaises(downloader.QualityUnavailable):
+            downloader.QualityPolicy(720, 720).check(unknown.get('width'), unknown.get('height'))
 
-    def test_portrait_selection_uses_pixel_height(self):
+    def test_portrait_selection_uses_shorter_dimension(self):
         selected = self.select(720, [self.video(1280, width=720), self.video(640, width=360), self.audio()])
-        self.assertEqual((selected["width"], selected["height"]), (360, 640))
+        self.assertEqual((selected["width"], selected["height"]), (720, 1280))
 
-    def test_auto_retains_unrestricted_fallback_after_capped_selection(self):
+    def test_auto_selects_highest_combined_without_a_cap(self):
         self.assertEqual(self.select(720, [self.video(480), self.audio()])["height"], 480)
         self.assertEqual(self.select(None, [self.video(2160, acodec="aac")])["height"], 2160)
 

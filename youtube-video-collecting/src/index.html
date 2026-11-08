@@ -31,10 +31,11 @@
               <button id="yt-back-btn" class="yt-nav-btn" title="Go back">←</button>
               <button id="yt-forward-btn" class="yt-nav-btn" title="Go forward">→</button>
               <button id="yt-refresh-btn" class="yt-nav-btn" title="Refresh page">⟳</button>
+              <button class="yt-nav-btn" data-ublock-viewer="youtube-webview" title="Open uBlock Origin controls" disabled>uBlock</button>
               <input type="text" id="yt-url-field" class="yt-url-input" readonly placeholder="Loading..." />
             </div>
             <!-- YouTube WebView -->
-            <webview id="youtube-webview" src="https://www.youtube.com"
+            <webview id="youtube-webview" src="about:blank"
               sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation">
             </webview>
           </div>
@@ -105,9 +106,10 @@
             <table id="rows-grid" class="rows-grid">
               <thead>
                 <tr>
-                  <th>Row</th>
-                  <th>URL / Timestamps</th>
-                  <th>TS Count</th>
+                  <th scope="col" class="row-num">Row</th>
+                  <th scope="col" class="video-column">Video 1</th>
+                  <th scope="col" class="timestamp-column">Timestamps 1</th>
+                  <th scope="col" class="row-timestamp-count">TS Count</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -141,18 +143,29 @@
         </div>
 
         <div class="form-section">
-          <label class="form-label" for="downloader-resolution">Maximum video height:</label>
+          <label class="form-label" for="downloader-minimum">Minimum accepted quality:</label>
+          <select id="downloader-minimum" class="form-input">
+            <option value="144">144p</option><option value="240">240p</option>
+            <option value="360">360p</option><option value="480">480p</option>
+            <option value="720">720p</option><option value="1080" selected>1080p</option>
+            <option value="1440">1440p</option><option value="2160">2160p</option>
+          </select>
+          <p style="font-size:12px;color:#718096">If this quality cannot be delivered, the clip fails clearly. Choose a lower minimum explicitly for low-resolution originals.</p>
+          <label><input type="checkbox" id="downloader-replace-existing"> Replace existing clips after the new download passes validation</label>
+        </div>
+        <div class="form-section">
+          <label class="form-label" for="downloader-resolution">Maximum quality:</label>
           <select id="downloader-resolution" class="form-input" aria-describedby="downloader-resolution-hint">
-            <option value="auto" selected>Auto (current behavior)</option>
+            <option value="auto">Best available (may exceed 4K)</option>
             <option value="360">360p</option>
             <option value="480">480p</option>
             <option value="720">720p</option>
-            <option value="1080">1080p (Full HD)</option>
+            <option value="1080" selected>1080p (Full HD)</option>
             <option value="1440">1440p (2K)</option>
             <option value="2160">2160p (4K)</option>
           </select>
           <p id="downloader-resolution-hint" style="font-size: 12px; color: #718096; margin: 6px 0 0;">
-            Uses the best available quality up to this height, without upscaling. Portrait videos are also limited by pixel height.
+            Quality uses the shorter dimension, so 1080 × 1920 portrait video counts as 1080p. Downloads must meet your minimum and keep the chosen quality through retries.
             MP4 output uses 8-bit H.264 SDR and preserves the source frame rate. Some Windows players may not support 4K at 60 fps.
           </p>
         </div>
@@ -226,8 +239,9 @@
         <div class="trimmer-layout">
           <div class="trimmer-left">
             <label class="form-label">Video Preview</label>
+            <button class="btn-secondary" data-ublock-viewer="trimmer-webview" disabled>uBlock Origin controls</button>
             <div class="trimmer-webview-container">
-              <webview id="trimmer-webview" src="https://www.youtube.com"
+              <webview id="trimmer-webview" src="about:blank"
                 sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-presentation">
               </webview>
             </div>
@@ -572,6 +586,13 @@
       </div>
 
       <div class="settings-modal-body">
+        <div class="settings-section">
+          <label class="settings-label">YouTube ad blocking</label>
+          <p id="ublock-status" role="status" aria-live="polite">Checking uBlock Origin…</p>
+          <button id="ublock-install-btn" class="settings-btn-secondary" disabled>Install uBlock Origin</button>
+          <button id="ublock-settings-btn" class="settings-btn-secondary" disabled>uBlock settings</button>
+          <p class="settings-hint">Installs the official uBlock Origin extension from GitHub. Its filter lists update automatically.</p>
+        </div>
         <!-- Autosave Interval Setting -->
         <div class="settings-section">
           <label class="settings-label">Auto-save Interval (minutes):</label>
@@ -623,6 +644,7 @@
   <script src="collector-navigation.js"></script>
   <script src="renderer.js"></script>
   <script src="tools-handler.js"></script>
+  <script src="ublock-controls.js"></script>
 </body>
 
 </html>

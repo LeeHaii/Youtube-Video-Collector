@@ -161,3 +161,21 @@ For issues or feature requests, please check the project repository or contact t
 ---
 
 **Made with ❤️ for YouTube researchers and content reviewers**
+
+
+## Downloader quality (1.0.2)
+
+The 5-Sec Downloader starts with a 1080p minimum and maximum. Set both controls
+before starting. Portrait 1080×1920 is treated as 1080p. Best available removes
+the maximum; the minimum remains enforced.
+
+Lower-quality originals require an explicitly lower minimum. Delivery failures
+never automatically lower the selected quality. Quality unavailable, delivery
+errors, and output conflicts are counted separately from successful clips.
+
+Use a fresh output directory for initial diagnosis. Old positional files without
+matching quality sidecars are preserved and reported as conflicts. Enable
+replacement explicitly when you want newly validated media to replace them.
+Exported retry CSVs include a `.quality.json` settings file; keep the pair together
+and select the same quality settings when retrying. Local `run-*.jsonl` and
+`run-*.quality.json` files provide the source/attempt/build evidence for support.

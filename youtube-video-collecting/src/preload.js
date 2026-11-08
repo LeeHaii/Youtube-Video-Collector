@@ -5,13 +5,16 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // Expose safe APIs to the renderer process
 contextBridge.exposeInMainWorld('electronAPI', {
+  getUBlockStatus: () => ipcRenderer.invoke('ublock-status'),
+  installUBlock: () => ipcRenderer.invoke('ublock-install'),
+  openUBlock: (viewerId) => ipcRenderer.invoke('ublock-open', viewerId),
   // YouTube Collector - Export CSV
   exportCSV: (rows) => ipcRenderer.invoke('export-csv', rows),
 
   // 5-Sec Downloader APIs
   openFileDialog: (options) => ipcRenderer.invoke('open-file-dialog', options),
   openFolderDialog: () => ipcRenderer.invoke('open-folder-dialog'),
-  startDownload: (csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, resolution = 'auto') => ipcRenderer.invoke('start-download', csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, resolution),
+  startDownload: (csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, resolution = '1080', minimum, replaceExisting = false) => ipcRenderer.invoke('start-download', csvPath, outputPath, clipSleepMin, clipSleepMax, rowSleepMin, rowSleepMax, resolution, minimum, replaceExisting),
   stopDownload: () => ipcRenderer.invoke('stop-download'),
   extractRateLimitErrors: () => ipcRenderer.invoke('extract-rate-limit-errors'),
   extractAgeRestrictionErrors: () => ipcRenderer.invoke('extract-age-restriction-errors'),
@@ -49,6 +52,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openUrl: (url) => ipcRenderer.invoke('open-url', url),
 
   // Event Listeners for process completion
+  onDownloadClipResult: (callback) => { ipcRenderer.on('download-clip-result', (_event, record) => callback(record)); },
   onDownloadComplete: (callback) => {
     ipcRenderer.on('download-complete', (event, success) => callback(success));
   },

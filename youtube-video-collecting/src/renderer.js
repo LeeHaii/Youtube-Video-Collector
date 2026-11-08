@@ -798,6 +798,24 @@ function updateCurrentRowDisplay() {
 // Update rows table display
 function updateRowsTable() {
   rowsGrid.innerHTML = '';
+  const videoColumnCount = rows.reduce((count, row) => Math.max(count, Math.ceil(row.length / 2)), 1);
+  const table = document.querySelector('#rows-grid');
+  table.style.width = `calc(60px + ${videoColumnCount} * (var(--video-column-width) + var(--timestamp-column-width)) + var(--count-column-width))`;
+  const headerRow = document.querySelector('#rows-grid thead tr');
+  headerRow.innerHTML = '';
+  const addHeader = (label, className) => {
+    const header = document.createElement('th');
+    header.textContent = label;
+    header.className = className;
+    header.scope = 'col';
+    headerRow.appendChild(header);
+  };
+  addHeader('Row', 'row-num');
+  for (let index = 0; index < videoColumnCount; index++) {
+    addHeader(`Video ${index + 1}`, 'video-column');
+    addHeader(`Timestamps ${index + 1}`, 'timestamp-column');
+  }
+  addHeader('TS Count', 'row-timestamp-count');
   rows.forEach((row, rowIndex) => {
     const tr = document.createElement('tr');
     
@@ -813,18 +831,50 @@ function updateRowsTable() {
     tr.appendChild(numCell);
     
     // Add URL and timestamps as separate cells (Cell 2, 3, 4, 5, ...)
-    for (let i = 0; i < row.length; i += 2) {
+    for (let i = 0; i < videoColumnCount * 2; i += 2) {
       const url = row[i];
       const timestamps = row[i + 1] || '';
+
+      // Keep later columns and the total aligned when rows contain fewer videos.
+      if (i >= row.length) {
+        const emptyVideo = document.createElement('td');
+        emptyVideo.className = 'video-column';
+        const emptyTimestamps = document.createElement('td');
+        emptyTimestamps.className = 'timestamp-column';
+        tr.appendChild(emptyVideo);
+        tr.appendChild(emptyTimestamps);
+        continue;
+      }
       
       // URL cell
       const urlCell = document.createElement('td');
-      urlCell.className = 'row-data url-data-cell';
+      urlCell.className = 'row-data url-data-cell video-column';
       
       const urlButton = document.createElement('button');
       urlButton.className = 'url-cell-button';
-      urlButton.textContent = url;
+      urlButton.type = 'button';
       urlButton.title = `Click to load: ${url}`;
+      urlButton.setAttribute('aria-label', `Load video: ${url}`);
+      const videoId = CollectorSession.videoKey(url);
+      if (videoId) {
+        urlButton.classList.add('video-thumbnail-button');
+        const thumbnail = document.createElement('img');
+        thumbnail.className = 'video-thumbnail';
+        thumbnail.alt = `YouTube video ${videoId}`;
+        thumbnail.loading = 'lazy';
+        thumbnail.decoding = 'async';
+        thumbnail.referrerPolicy = 'no-referrer';
+        thumbnail.width = 160;
+        thumbnail.height = 90;
+        thumbnail.addEventListener('error', () => {
+          urlButton.classList.remove('video-thumbnail-button');
+          urlButton.textContent = url;
+        }, { once: true });
+        thumbnail.src = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+        urlButton.appendChild(thumbnail);
+      } else {
+        urlButton.textContent = url;
+      }
       urlButton.addEventListener('click', () => {
         loadRowToPanel(rowIndex, i);
       });
@@ -844,7 +894,7 @@ function updateRowsTable() {
       
       // Timestamps cell
       const tsCell = document.createElement('td');
-      tsCell.className = 'row-data';
+      tsCell.className = 'row-data timestamp-column';
       tsCell.textContent = timestamps;
       tr.appendChild(tsCell);
     }

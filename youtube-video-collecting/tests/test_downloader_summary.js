@@ -28,6 +28,7 @@ test('parses structured errors when process output arrives in arbitrary chunks',
     { category: 'RATE_LIMIT', url: 'https://www.youtube.com/watch?v=two', timestamps: [15] },
   ]);
   assert.deepEqual(buildDownloadErrorSummary(state), {
+    schemaVersion: null, qualityUnavailableCount: 0, validationFailedCount: 0, outputConflictCount: 0, degradedCount: 0, protocolErrors: [],
     total: 4,
     processed: 4,
     succeeded: 1,

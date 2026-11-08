@@ -13,7 +13,10 @@ import sys
 import tempfile
 import time
 import urllib.request
+import uuid
+from dataclasses import asdict
 from dataclasses import dataclass, field, replace
+from collections import OrderedDict
 from fractions import Fraction
 from functools import lru_cache
 from importlib import metadata
@@ -21,6 +24,15 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
+# Support dynamic module imports used by tests as well as the frozen executable.
+if not getattr(sys, "frozen", False):
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from downloader_quality import (QualityPolicy, QualityUnavailable, VideoQualityState,
+                                PROTOCOL_VERSION, SUPPORTED_QUALITIES, candidates,
+                                format_selector, source_identity, numeric)
+from downloader_output import OutputTransaction, OutputConflict, RunLock, atomic_json, file_hash
+import downloader_control
+from downloader_control import OperationControl, DownloadCanceled
 from yt_dlp import YoutubeDL
 from yt_dlp.version import __version__ as YT_DLP_VERSION
 
@@ -50,7 +62,7 @@ sys.stderr = configure_output_stream(sys.stderr)
 
 
 CLIP_DURATION = 5.0
-MAX_CLIP_ATTEMPTS = 3
+MAX_CLIP_ATTEMPTS = 4
 
 EXIT_SUCCESS = 0
 EXIT_FATAL = 1
@@ -64,8 +76,14 @@ ERROR_AUTHENTICATION = "AUTHENTICATION"
 ERROR_UNAVAILABLE = "UNAVAILABLE"
 ERROR_FORMAT = "FORMAT"
 ERROR_GENERIC = "ERROR"
+ERROR_QUALITY = "QUALITY_UNAVAILABLE"
+ERROR_VALIDATION = "VALIDATION_FAILED"
+ERROR_CONFLICT = "OUTPUT_CONFLICT"
 
 ERROR_HEADERS = {
+    ERROR_QUALITY: "QUALITY_UNAVAILABLE_ERRORS",
+    ERROR_VALIDATION: "VALIDATION_FAILED_ERRORS",
+    ERROR_CONFLICT: "OUTPUT_CONFLICT_ERRORS",
     ERROR_FORBIDDEN: "FORBIDDEN_ERRORS",
     ERROR_RATE_LIMIT: "RATE_LIMIT_ERRORS",
     ERROR_AGE_RESTRICTION: "AGE_RESTRICTION_ERRORS",
@@ -83,7 +101,7 @@ RETRYABLE_ERRORS = {
     ERROR_GENERIC,
 }
 
-DEFAULT_FORMAT = "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
+DEFAULT_FORMAT = "bestvideo*+bestaudio/bestvideo*/best"
 SUPPORTED_HEIGHTS = (360, 480, 720, 1080, 1440, 2160)
 
 
@@ -91,7 +109,7 @@ SUPPORTED_HEIGHTS = (360, 480, 720, 1080, 1440, 2160)
 class DownloadProfile:
     name: str
     player_clients: Tuple[str, ...] = ()
-    format_selector: str = DEFAULT_FORMAT
+    format_selector: object = DEFAULT_FORMAT
     max_height: Optional[int] = None
 
 
@@ -107,12 +125,9 @@ DOWNLOAD_PROFILES = (
 def profiles_for_resolution(max_height: Optional[int] = None) -> Tuple[DownloadProfile, ...]:
     if max_height is None:
         return DOWNLOAD_PROFILES
-    if type(max_height) is not int or max_height not in SUPPORTED_HEIGHTS:
+    if type(max_height) is not int or max_height not in SUPPORTED_QUALITIES:
         raise ValueError(f"Unsupported maximum video height: {max_height}")
-    selector = (
-        f"bestvideo*[height<={max_height}]+bestaudio/"
-        f"best[height<={max_height}]"
-    )
+    selector = format_selector(QualityPolicy(144, max_height), require_audio=False)
     return tuple(
         replace(profile, format_selector=selector, max_height=max_height)
         for profile in DOWNLOAD_PROFILES
@@ -124,6 +139,7 @@ class ClipOutcome:
     status: str
     message: str = ""
     attempts: int = 1
+    record: dict = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -158,6 +174,12 @@ class ProcessingSummary:
 
     def payload(self) -> Dict[str, object]:
         return {
+            "schemaVersion": PROTOCOL_VERSION,
+            "qualityUnavailable": self.count(ERROR_QUALITY),
+            "validationFailed": self.count(ERROR_VALIDATION),
+            "outputConflict": self.count(ERROR_CONFLICT),
+            "degraded": 0,
+            "notProcessed": self.total - self.processed,
             "total": self.total,
             "processed": self.processed,
             "succeeded": self.succeeded,
@@ -181,14 +203,7 @@ class ProcessingSummary:
 
 
 def clean_youtube_url(url: str) -> str:
-    try:
-        parsed = urlparse(url)
-        params = parse_qs(parsed.query)
-        if "v" in params:
-            return f"https://www.youtube.com/watch?v={params['v'][0]}"
-    except (TypeError, ValueError):
-        pass
-    return url
+    return source_identity(url)
 
 
 def parse_input_csv(csv_path: str):
@@ -234,6 +249,7 @@ def parse_input_csv(csv_path: str):
 def sanitize_diagnostic(message: str) -> str:
     # Signed googlevideo URLs contain IP/session data; retain the host but redact queries.
     message = re.sub(r"(https?://[^\s?]+)\?[^\s]+", r"\1?<redacted>", str(message))
+    message = re.sub(r"(?i)(authorization|cookie|set-cookie|po_token|token)[\"']?\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\r\n|,}]+)", r"\1=<redacted>", str(message))
     message = re.sub(r"(/videoplayback)\?[^\s]+", r"\1?<redacted>", message)
     return " ".join(message.replace("\r", " ").replace("\n", " ").split())[:800]
 
@@ -492,11 +508,8 @@ def find_ffprobe_exe(ffmpeg_executable: Path) -> Optional[Path]:
 
 
 def media_command(arguments: List[str], timeout: float = 30) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        arguments, capture_output=True, text=True, encoding="utf-8", errors="replace",
-        timeout=timeout, check=False,
-        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-    )
+    return downloader_control.run_media(arguments, timeout)
+
 
 
 @lru_cache(maxsize=8)
@@ -645,6 +658,13 @@ def resolve_encoding_policy(info: dict, ffprobe: Path, ydl: YoutubeDL, *,
         if high_depth or not pix_fmt or str(video.get("dynamic_range") or "SDR").upper() != "SDR":
             raise EncodingError("Cannot determine source transfer characteristics; refusing to guess HDR color conversion.")
     width, height = stream.get("width"), stream.get("height")
+    rotation = next((side.get('rotation') for side in stream.get('side_data_list', []) if 'rotation' in side),
+                    stream.get('tags', {}).get('rotate', 0))
+    try:
+        if abs(float(rotation)) % 180 == 90:
+            width, height = height, width
+    except (TypeError, ValueError):
+        raise EncodingError('Cannot determine source display rotation')
     fps = frame_rate(stream.get("avg_frame_rate")) or frame_rate(stream.get("r_frame_rate"))
     has_audio = has_audio or any(stream.get("codec_type") == "audio" for stream in data.get("streams", []))
     primaries = stream.get("color_primaries")
@@ -703,6 +723,7 @@ def validate_output(path: Path, policy: EncodingPolicy, duration: float, ffprobe
         stale = ("Mastering display metadata", "Content light level metadata")
         if any(side.get("side_data_type") in stale for side in video.get("side_data_list", [])):
             raise EncodingError("Output validation failed: stale HDR metadata remains.")
+    return data
 
 
 def build_ydl_options(
@@ -734,11 +755,11 @@ def build_ydl_options(
         "noprogress": True,
         "logger": logger,
         "cachedir": str(cache_directory),
-        "socket_timeout": 30,
+        "socket_timeout": 10,
         "sleep_interval_requests": request_sleep,
-        "retries": 3,
-        "extractor_retries": 2,
-        "fragment_retries": 3,
+        "retries": 1,
+        "extractor_retries": 1,
+        "fragment_retries": 1,
         "file_access_retries": 3,
         "ffmpeg_location": str(ffmpeg_executable.parent),
     }
@@ -754,6 +775,8 @@ def build_ydl_options(
         options["extractor_args"] = {
             "youtube": {"player_client": list(profile.player_clients)}
         }
+    options["format_sort"] = ["res", "fps", "+hasaud"]
+    options["format_sort_force"] = True
     if profile.max_height is not None:
         # Prefer the largest qualifying height, even when extractor quality ranks differ.
         options["format_sort"] = ["height", "+hasaud"]
@@ -788,11 +811,67 @@ class VideoDownloadSession:
             js_runtime,
         )
         self.ydl = YoutubeDL(self.options)
+        original_urlopen = getattr(self.ydl, 'urlopen', None)
+        def controlled_urlopen(request):
+            control = downloader_control.ACTIVE
+            if control:
+                control.check()
+                self.ydl.params['socket_timeout'] = min(10, max(0.1, control.deadline - time.monotonic()))
+            response = original_urlopen(request)
+            if control:
+                control.check()
+            return response
+        if original_urlopen is not None:
+            self.ydl.urlopen = controlled_urlopen
         self.info = None
         self.ffmpeg_executable = ffmpeg_executable
         self.cache_directory = cache_directory
+        self.js_runtime = js_runtime
         self.ffprobe = None
         self.encoding_policy = None
+        self.quality_policy = None
+        self.inventory_info = None
+        self.extracted_at = 0
+
+    def discover(self, quality_policy):
+        self.quality_policy = quality_policy
+        self.ydl.params['format'] = DEFAULT_FORMAT
+        self.ydl.params['format_sort'] = ['res', 'fps', '+hasaud']
+        self.inventory_info = self.ydl.extract_info(self.url, download=False)
+        self.extracted_at = time.monotonic()
+        require_audio = 'youtube.com/' in source_identity(self.url)
+        return candidates(self.inventory_info.get('formats', [self.inventory_info]), quality_policy,
+                          require_audio=require_audio)
+
+    def select(self, candidate, start):
+        self.ydl.params['format'] = format_selector(self.quality_policy, candidate['format_id'],
+                                                   require_audio='youtube.com/' in source_identity(self.url))
+        raw = copy.deepcopy(self.inventory_info)
+        for key in ('requested_downloads', 'requested_formats', 'url', 'format_id', 'format'):
+            raw.pop(key, None)
+        self.info = self.ydl.process_ie_result(raw, download=False)
+        self.ffprobe = check_encoding_tools(self.ffmpeg_executable)
+        self.encoding_policy = resolve_encoding_policy(self.info, self.ffprobe, self.ydl,
+            ffmpeg_executable=self.ffmpeg_executable, cache_directory=self.cache_directory, start=start)
+        self.quality_policy.check(self.encoding_policy.width, self.encoding_policy.height, self.encoding_policy.fps)
+        self.ydl.params['external_downloader_args'] = {'ffmpeg_o': encoding_arguments(self.encoding_policy)}
+        return self.encoding_policy
+
+    def source_record(self):
+        video, _ = selected_video(self.info)
+        selection = (self.info.get('requested_downloads') or [self.info])[0]
+        formats = selection.get('requested_formats') or [selection]
+        output = next((stream for stream in (self.output_probe or {}).get('streams', []) if stream.get('codec_type') == 'video'), {})
+        return {'profile': self.profile.name, 'formatId': self.info.get('format_id'),
+                'formatIds': [fmt.get('format_id') for fmt in formats],
+                'client': video.get('__yt_dlp_client') or video.get('client'),
+                'protocol': video.get('protocol'), 'sourceCodec': video.get('vcodec'),
+                'sourceBitrateKbps': video.get('vbr'), 'encoding': asdict(self.encoding_policy),
+                'sourceId': self.info.get('id'), 'outputCodec': output.get('codec_name'),
+                'outputPixelFormat': output.get('pix_fmt'),
+                'outputFps': frame_rate(output.get('avg_frame_rate')),
+                'tools': tool_versions(self.ffmpeg_executable),
+                'jsRuntime': self.js_runtime.get('version') if self.js_runtime else None}
 
     def download(self, start: int, end: int, output_template: str) -> None:
         self.logger.clear()
@@ -812,8 +891,8 @@ class VideoDownloadSession:
                                                            ffmpeg_executable=self.ffmpeg_executable,
                                                            cache_directory=self.cache_directory, start=start)
             policy = self.encoding_policy
-            if self.profile.max_height is not None and policy.height > self.profile.max_height:
-                raise EncodingError("Probed source exceeds the selected maximum video height.")
+            if self.profile.max_height is not None and min(policy.width, policy.height) > self.profile.max_height:
+                raise EncodingError("Probed source exceeds the selected maximum quality.")
             self.ydl.params["external_downloader_args"] = {"ffmpeg_o": encoding_arguments(policy)}
             self.log_callback(f"      Selected source: {policy.width}x{policy.height}, {policy.fps:g} fps, "
                               f"{policy.dynamic_range} ({self.profile.name})\n")
@@ -826,7 +905,9 @@ class VideoDownloadSession:
         output_path = Path(output_template.replace("%(ext)s", "mp4"))
         source_duration = self.info.get("duration")
         duration = min(end - start, max(0, source_duration - start)) if source_duration else end - start
-        validate_output(output_path, self.encoding_policy, duration, self.ffprobe)
+        self.output_probe = validate_output(output_path, self.encoding_policy, duration, self.ffprobe)
+        if self.quality_policy:
+            self.quality_policy.check(self.encoding_policy.width, self.encoding_policy.height, self.encoding_policy.fps)
 
     def diagnostics(self) -> str:
         return self.logger.recent_text()
@@ -836,16 +917,14 @@ class VideoDownloadSession:
 
 
 def cleanup_partial_outputs(output_template: str) -> None:
-    stem = output_template.replace(".%(ext)s", "")
-    stem_path = Path(stem)
-    if not stem_path.parent.exists():
+    # Only an attempt-owned temporary directory may be cleaned. Never glob final
+    # positional filenames: they may be completed media from an earlier run.
+    path = Path(output_template)
+    if not path.parent.name.startswith('.clip-'):
         return
-    for candidate in stem_path.parent.glob(f"{stem_path.name}.*"):
+    for candidate in path.parent.iterdir():
         if candidate.is_file():
-            try:
-                candidate.unlink()
-            except OSError:
-                pass
+            candidate.unlink(missing_ok=True)
 
 
 def check_stop_flag(stop_flag_path: Optional[str]) -> bool:
@@ -883,84 +962,145 @@ def retry_delay(category: str, attempt: int) -> float:
 
 
 def download_clip(
-    url: str,
-    start_time: float,
-    duration: float,
-    output_template: str,
-    ffmpeg_executable: Path,
-    cache_directory: Path,
-    js_runtime: Optional[Dict[str, object]],
-    request_sleep: float,
-    session_cache: Dict[str, VideoDownloadSession],
-    log_callback: Callable[[str], None] = print,
-    stop_event=None,
-    stop_flag_path: Optional[str] = None,
-    session_factory=VideoDownloadSession,
-    sleep_func: Callable[[float], None] = time.sleep,
-    *,
-    profiles: Tuple[DownloadProfile, ...] = DOWNLOAD_PROFILES,
+    url, start_time, duration, output_template, ffmpeg_executable, cache_directory,
+    js_runtime, request_sleep, session_cache, log_callback=print, stop_event=None,
+    stop_flag_path=None, session_factory=VideoDownloadSession, sleep_func=time.sleep,
+    *, profiles=DOWNLOAD_PROFILES, quality_policy=None, quality_state=None,
+    replace_existing=False, deadline_seconds=180,
 ) -> ClipOutcome:
-    start = int(start_time)
-    end = int(start_time + duration)
-    last_category = ERROR_GENERIC
-    last_message = "Unknown download failure"
-    attempts_used = 0
-
-    profiles = sorted(
-        profiles[:MAX_CLIP_ATTEMPTS],
-        key=lambda profile: profile.name not in session_cache,
-    )
-    for attempt, profile in enumerate(profiles, start=1):
-        attempts_used = attempt
-        if stop_requested(stop_event, stop_flag_path):
-            return ClipOutcome("CANCELED", "Canceled by user", attempt)
-
-        if attempt > 1:
-            cleanup_partial_outputs(output_template)
-            delay = retry_delay(last_category, attempt - 1)
-            log_callback(
-                f"      Retrying with {profile.name} delivery in {delay:.1f}s "
-                f"after {last_category.lower()}...\n"
-            )
-            if not interruptible_sleep(
-                delay,
-                stop_event,
-                stop_flag_path,
-                sleep_func=sleep_func,
-            ):
-                return ClipOutcome("CANCELED", "Canceled by user", attempt)
-
-        log_callback(f"    Downloading {start}-{end}s ({profile.name}) ... ")
-        session = session_cache.get(profile.name)
-        if session is None:
-            session = session_factory(
-                url,
-                profile,
-                ffmpeg_executable,
-                cache_directory,
-                request_sleep,
-                js_runtime,
-                log_callback,
-            )
-            session_cache[profile.name] = session
-
-        try:
-            session.download(start, end, output_template)
-            log_callback("OK\n")
-            return ClipOutcome("OK", attempts=attempt)
-        except Exception as error:
-            diagnostics = session.diagnostics()
-            last_message = sanitize_diagnostic(f"{error} | {diagnostics}")
-            last_category = classify_error(last_message)
-            log_callback(f"FAILED [{last_category}]: {last_message}\n")
-            session.close()
-            session_cache.pop(profile.name, None)
-
-            if isinstance(error, EncodingError) or last_category not in RETRYABLE_ERRORS:
-                break
-
-    cleanup_partial_outputs(output_template)
-    return ClipOutcome(last_category, last_message, attempts_used)
+    policy = quality_policy or QualityPolicy(maximum_edge=profiles[0].max_height or 1080,
+        minimum_edge=min(1080, profiles[0].max_height or 1080))
+    state = quality_state or VideoQualityState()
+    start, end = int(start_time), int(start_time + duration)
+    identity = {'source': hashlib.sha256(source_identity(url).encode()).hexdigest(),
+                'start': start, 'end': end, 'policy': policy.fingerprint, 'encodingVersion': 1}
+    def cache_key(profile):
+        return identity['source'] + ':' + policy.fingerprint + ':' + profile.name
+    transaction = OutputTransaction(Path(output_template.replace('%(ext)s', 'mp4')), identity, replace_existing)
+    attempts, discovery_errors, discovery = [], [], []
+    def result(status, message='', record=None):
+        return ClipOutcome(status, message, len(attempts), {
+            'policy': policy.payload(), 'target': state.target, 'sourceKey': identity['source'],
+            'attempts': attempts, 'discoveryErrors': discovery_errors, 'discovery': discovery,
+            'discoveryComplete': not discovery_errors,
+            'outputPresentButNotDelivered': status != 'OK' and transaction.destination.exists(), **(record or {})})
+    try:
+        with OperationControl(lambda: stop_requested(stop_event, stop_flag_path), deadline_seconds) as control:
+            existing = transaction.existing()
+            if existing:
+                encoding = EncodingPolicy(**existing['encoding'])
+                state.accept(policy, encoding)
+                validate_output(transaction.destination, encoding, existing['duration'], check_encoding_tools(ffmpeg_executable))
+                return result('OK', record={**existing, 'reused': True})
+            ranked = []
+            for profile in profiles:
+                control.check()
+                session = session_cache.get(cache_key(profile))
+                try:
+                    if session is None:
+                        session = session_factory(url, profile, ffmpeg_executable, cache_directory,
+                                                  request_sleep, js_runtime, log_callback)
+                        session_cache[cache_key(profile)] = session
+                    inventory = session.discover(policy) if session.inventory_info is None or time.monotonic() - getattr(session, 'extracted_at', time.monotonic()) > 300 else candidates(
+                        session.inventory_info.get('formats', [session.inventory_info]), policy,
+                        require_audio='youtube.com/' in source_identity(url))
+                    discovered = session.inventory_info.get('formats', [session.inventory_info])
+                    tiers = sorted({min(numeric(f.get('width')), numeric(f.get('height'))) for f in discovered
+                                    if f.get('vcodec') != 'none' and f.get('width') and f.get('height')}, reverse=True)
+                    discovery.append({'profile': profile.name, 'availableQualities': tiers, 'eligibleCandidates': len(inventory)})
+                    for candidate in inventory:
+                        rank = (min(numeric(candidate.get('width')), numeric(candidate.get('height'))), numeric(candidate.get('fps')))
+                        ranked.append((rank, profile, candidate))
+                except Exception as error:
+                    control.check()
+                    category = ERROR_QUALITY if isinstance(error, QualityUnavailable) else classify_error(str(error))
+                    discovery_errors.append({'profile': profile.name, 'category': category, 'message': sanitize_diagnostic(error)})
+                    if session:
+                        session.close()
+                    session_cache.pop(cache_key(profile), None)
+                    if category == ERROR_RATE_LIMIT:
+                        return result(category, sanitize_diagnostic(error))
+            control.check()
+            ranked.sort(key=lambda item: item[0], reverse=True)
+            if not ranked:
+                for cached in session_cache.values():
+                    cached.inventory_info = None
+                access = next((e for e in discovery_errors if e['category'] != ERROR_QUALITY), None)
+                return result(access['category'] if access else ERROR_QUALITY,
+                              access['message'] if access else 'No accessible source meets the requested minimum/maximum quality')
+            # A provisional target prevents failed high-quality delivery from making
+            # a lower advertised candidate an ordinary success. Real probes verify it.
+            target = state.target or ranked[0][0]
+            if target[0] and state.target is None:
+                state.target = target
+            queue = list(ranked)
+            refreshed = set()
+            last_category, last_message = ERROR_QUALITY, 'Locked quality is unavailable'
+            with transaction:
+                while queue and len(attempts) < MAX_CLIP_ATTEMPTS:
+                    control.check()
+                    rank, profile, candidate = queue.pop(0)
+                    if rank[0] and (rank[0] < target[0] or (rank[1] and rank[1] + 0.1 < target[1])):
+                        continue
+                    session = session_cache.get(cache_key(profile))
+                    if session is None:
+                        continue
+                    if attempts:
+                        delay = min(retry_delay(last_category, len(attempts)), max(0, control.deadline - time.monotonic()))
+                        if not interruptible_sleep(delay, stop_event, stop_flag_path, sleep_func):
+                            raise DownloadCanceled('Canceled by user')
+                    control.check()
+                    attempt = {'profile': profile.name, 'formatId': candidate['format_id']}
+                    attempts.append(attempt)
+                    try:
+                        encoding = session.select(candidate, start)
+                        policy.check(encoding.width, encoding.height, encoding.fps, target)
+                        state.accept(policy, encoding)
+                        target = state.target
+                        attempt.update(sourceDimensions=[encoding.width, encoding.height], fps=encoding.fps)
+                        log_callback(f'      Selected source: {encoding.width}x{encoding.height}, {encoding.fps:g} fps ({profile.name}); strict target {target[0]:g}p\n')
+                        session.download(start, end, transaction.template)
+                        control.check()
+                        policy.check(encoding.width, encoding.height, encoding.fps, target)
+                        source_duration = session.info.get('duration')
+                        effective_duration = min(end-start, max(0, source_duration-start)) if source_duration else end-start
+                        record = {**session.source_record(), 'duration': effective_duration,
+                                  'policy': policy.payload(), 'target': target, 'build': build_information(),
+                                  'outputDimensions': [encoding.width, encoding.height], 'reused': False}
+                        committed = transaction.publish(record)
+                        return result('OK', record=committed)
+                    except Exception as error:
+                        control.check()
+                        last_category = (ERROR_QUALITY if isinstance(error, QualityUnavailable) else
+                                         ERROR_VALIDATION if isinstance(error, EncodingError) else classify_error(str(error)))
+                        last_message = sanitize_diagnostic(error)
+                        attempt.update(category=last_category, message=last_message)
+                        log_callback(f'      FAILED [{last_category}]: {last_message}\n')
+                        cleanup_partial_outputs(transaction.template)
+                        if last_category == ERROR_RATE_LIMIT or isinstance(error, EncodingError):
+                            break
+                        if last_category == ERROR_FORBIDDEN and profile.name not in refreshed and len(attempts) < MAX_CLIP_ATTEMPTS:
+                            refreshed.add(profile.name)
+                            try:
+                                fresh = session.discover(policy)
+                                same = [f for f in fresh if min(numeric(f.get('width')), numeric(f.get('height'))) >= target[0]
+                                        and numeric(f.get('fps')) + 0.1 >= target[1]]
+                                if same:
+                                    queue.insert(0, (target, profile, same[0]))
+                            except Exception as refresh_error:
+                                control.check()
+                                attempt['refreshError'] = sanitize_diagnostic(refresh_error)
+                return result(last_category, last_message)
+    except DownloadCanceled as error:
+        return result('CANCELED', str(error))
+    except OutputConflict as error:
+        return result(ERROR_CONFLICT, str(error))
+    except QualityUnavailable as error:
+        return result(ERROR_QUALITY, str(error))
+    except EncodingError as error:
+        return result(ERROR_VALIDATION, sanitize_diagnostic(error))
+    except Exception as error:
+        return result(classify_error(str(error)), sanitize_diagnostic(error))
 
 
 def close_sessions(session_cache: Dict[str, VideoDownloadSession]) -> None:
@@ -988,7 +1128,7 @@ def log_error_summaries(summary: ProcessingSummary, log_callback: Callable[[str]
     )
 
 
-def process_clips(
+def _process_clips(
     csv_path: str,
     output_base_dir: str,
     ffmpeg_executable: Path,
@@ -1004,8 +1144,17 @@ def process_clips(
     sleep_func: Callable[[float], None] = time.sleep,
     *,
     max_height: Optional[int] = None,
+    quality_policy=None, replace_existing=False, run_id=None, record_stream=None, retry_targets=None, session_pools=None, session_factory=VideoDownloadSession,
 ) -> ProcessingSummary:
-    profiles = profiles_for_resolution(max_height)
+    policy = quality_policy or QualityPolicy(minimum_edge=min(1080, max_height or 1080), maximum_edge=max_height if max_height is not None else 1080)
+    profiles = DOWNLOAD_PROFILES
+    callback_profiles = profiles_for_resolution(max_height)
+    quality_states = {}
+    for key, target in (retry_targets or {}).items():
+        if not isinstance(target, list) or len(target) != 2 or not all(numeric(v) for v in target):
+            raise ValueError('Invalid retry quality target')
+        policy.check(target[0], target[0], target[1])
+        quality_states[key] = VideoQualityState(target=tuple(target))
     rows = parse_input_csv(csv_path)
     non_empty_rows = [(index, pairs) for index, pairs in enumerate(rows) if pairs]
     total_clips = sum(len(timestamps) for _, pairs in non_empty_rows for _, timestamps in pairs)
@@ -1032,7 +1181,13 @@ def process_clips(
 
         for url_index, (url, timestamps) in enumerate(pairs, start=1):
             log_callback(f"  URL: {url} with {len(timestamps)} timestamp(s)\n")
-            sessions: Dict[str, VideoDownloadSession] = {}
+            source_key = hashlib.sha256(source_identity(url).encode()).hexdigest()
+            sessions = session_pools.setdefault(source_key, {}) if session_pools is not None else {}
+            if session_pools is not None:
+                session_pools.move_to_end(source_key)
+                while len(session_pools) > 8:
+                    _, expired = session_pools.popitem(last=False)
+                    close_sessions(expired)
             try:
                 for clip_index, timestamp in enumerate(timestamps, start=1):
                     if stop_requested(stop_event, stop_flag_path):
@@ -1060,9 +1215,25 @@ def process_clips(
                         stop_event=stop_event,
                         stop_flag_path=stop_flag_path,
                         sleep_func=sleep_func,
-                        **({"profiles": profiles} if max_height is not None else {}),
+                        **({'profiles': profiles, 'quality_policy': policy,
+                            'quality_state': quality_states.setdefault(hashlib.sha256(source_identity(url).encode()).hexdigest(), VideoQualityState()),
+                            'replace_existing': replace_existing, 'session_factory': session_factory} if download_clip_func is download_clip else
+                           ({'profiles': callback_profiles} if max_height is not None else {})),
                     )
 
+                    record = {'schemaVersion': PROTOCOL_VERSION, 'runId': run_id,
+                              'clipId': f'{run_id}:{output_row_num}:{url_index}:{clip_index}',
+                              'row': output_row_num, 'pair': url_index, 'clip': clip_index,
+                              'url': source_identity(url) if source_identity(url).startswith('https://www.youtube.com/watch?v=') else sanitize_diagnostic(source_identity(url)),
+                              'timestamp': int(timestamp),
+                              'start': int(timestamp), 'end': int(timestamp + CLIP_DURATION),
+                              'path': output_template.replace('%(ext)s', 'mp4'),
+                              **outcome.record, 'status': outcome.status, 'message': outcome.message}
+                    line = json.dumps(record, ensure_ascii=False, separators=(',', ':'))
+                    if record_stream:
+                        record_stream.write(line + '\n')
+                        record_stream.flush()
+                    log_callback('CLIP_RESULT: ' + line + '\n')
                     if outcome.status == "CANCELED":
                         summary.canceled = True
                         break
@@ -1083,7 +1254,8 @@ def process_clips(
                             summary.canceled = True
                             break
             finally:
-                close_sessions(sessions)
+                if session_pools is None:
+                    close_sessions(sessions)
 
             if summary.canceled:
                 break
@@ -1106,8 +1278,54 @@ def process_clips(
 
     if summary.canceled:
         log_callback("⏹️ Processing canceled by user.\n")
+    targets = {key: list(state.target) for key, state in quality_states.items() if state.target}
+    atomic_json(Path(output_base_dir) / f'run-{run_id}.quality.json',
+                {'schemaVersion': PROTOCOL_VERSION, 'policy': policy.payload(), 'targets': targets,
+                 'summary': summary.payload(), 'build': build_information()})
     log_error_summaries(summary, log_callback)
     return summary
+
+
+@lru_cache(maxsize=1)
+def build_information():
+    base = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
+    manifest = base / 'downloader-build.json'
+    if manifest.is_file():
+        build = json.loads(manifest.read_text(encoding='utf-8'))
+    else:
+        digest = hashlib.sha256()
+        for name in ('5_sec_downloader.py', 'downloader_quality.py', 'downloader_output.py', 'downloader_control.py'):
+            digest.update((base / name).read_bytes())
+        build = {'sourceDigest': digest.hexdigest(), 'buildType': 'source'}
+    return {**build, 'schemaVersion': PROTOCOL_VERSION, 'ytDlp': YT_DLP_VERSION,
+            'ejs': ejs_version(), 'policyVersion': PROTOCOL_VERSION}
+
+
+@lru_cache(maxsize=8)
+def tool_versions(ffmpeg):
+    ffprobe = check_encoding_tools(ffmpeg)
+    return {name: media_command([str(path), '-version'], timeout=10).stdout.splitlines()[0]
+            for name, path in (('ffmpeg', ffmpeg), ('ffprobe', ffprobe))}
+
+
+def capabilities():
+    return {**build_information(), 'qualityModes': ['strict'],
+            'flags': ['--min-quality', '--max-quality', '--resolution', '--replace-existing', '--retry-policy'],
+            'defaultPolicy': QualityPolicy().payload()}
+
+
+def process_clips(*args, **kwargs):
+    output = Path(args[1] if len(args) > 1 else kwargs['output_base_dir'])
+    output.mkdir(parents=True, exist_ok=True)
+    run_id = uuid.uuid4().hex
+    with RunLock(output, run_id):
+        pools = OrderedDict()
+        try:
+            with open(output / f'run-{run_id}.jsonl', 'x', encoding='utf-8') as records:
+                return _process_clips(*args, **kwargs, run_id=run_id, record_stream=records, session_pools=pools)
+        finally:
+            for sessions in pools.values():
+                close_sessions(sessions)
 
 
 class DownloaderArgumentParser(argparse.ArgumentParser):
@@ -1126,17 +1344,30 @@ def parse_arguments(argv: Optional[List[str]] = None) -> argparse.Namespace:
     ):
         parser.add_argument(name, type=float, nargs="?", default=default)
     parser.add_argument("stop_flag_path", nargs="?", default=None)
-    parser.add_argument(
-        "--resolution", default="auto",
-        choices=["auto", *(str(height) for height in SUPPORTED_HEIGHTS)],
-        help="Maximum source-video height; lower resolutions are allowed. Auto retains the legacy policy.",
-    )
+    parser.add_argument('--resolution', choices=['auto', *(str(h) for h in SUPPORTED_HEIGHTS)])
+    parser.add_argument('--max-quality', choices=['auto', *(str(h) for h in SUPPORTED_QUALITIES)])
+    parser.add_argument('--min-quality', type=int, choices=SUPPORTED_QUALITIES)
+    parser.add_argument('--quality-mode', choices=['strict'], default='strict')
+    parser.add_argument('--replace-existing', action='store_true')
+    parser.add_argument('--retry-policy')
     args = parser.parse_args(argv)
-    args.max_height = None if args.resolution == "auto" else int(args.resolution)
+    if args.resolution is not None and args.max_quality is not None:
+        parser.error('Use either --resolution or --max-quality, not both')
+    maximum = args.max_quality or args.resolution or '1080'
+    args.max_height = None if maximum == 'auto' else int(maximum)
+    args.min_quality = args.min_quality if args.min_quality is not None else min(1080, args.max_height or 1080)
+    try:
+        args.quality_policy = QualityPolicy(args.min_quality, args.max_height)
+    except ValueError as error:
+        parser.error(str(error))
     return args
 
 
+
 def main() -> None:
+    if sys.argv[1:] == ['--capabilities-json']:
+        print(json.dumps(capabilities(), separators=(',', ':')))
+        return
     args = parse_arguments()
     csv_path, output_path = args.csv_path, args.output_path
     clip_sleep_min, clip_sleep_max = args.clip_sleep_min, args.clip_sleep_max
@@ -1167,7 +1398,8 @@ def main() -> None:
         print("🚀 Starting 5-Sec Download...")
         print(f"   CSV: {csv_path}")
         print(f"   Output: {output_path}")
-        print(f"   Maximum video height: {args.max_height or 'Auto (current behavior)'}")
+        print(f"   Quality: minimum {args.min_quality}p / maximum {args.max_height or 'best available'}; strict, shorter dimension")
+        print('   Build: ' + json.dumps(build_information()))
         print(f"   yt-dlp: {YT_DLP_VERSION}")
         print(f"   FFmpeg: {ffmpeg_executable}")
         print(f"   FFprobe: {check_encoding_tools(ffmpeg_executable)}")
@@ -1182,8 +1414,19 @@ def main() -> None:
         if js_runtime:
             print(f"   JS runtime: {js_runtime['name']} {js_runtime['version']} ({js_runtime['path']})\n")
         else:
-            print("   JS runtime: unavailable; Safari/HLS fallback will be used after direct 403 errors\n")
+            raise RuntimeError("Supported JavaScript runtime unavailable. Install Node.js 22+ or Deno before downloading; quality is not reduced automatically.")
 
+        if not ejs_version():
+            raise RuntimeError('EJS solver not bundled. Rebuild/install the pinned dependencies.')
+        retry_targets = {}
+        companion = Path(args.retry_policy or (str(csv_path) + '.quality.json'))
+        if args.retry_policy and not companion.is_file():
+            raise ValueError('Retry policy file not found')
+        if companion.is_file():
+            saved = json.loads(companion.read_text(encoding='utf-8'))
+            if saved.get('schemaVersion') != PROTOCOL_VERSION or saved.get('policy') != args.quality_policy.payload():
+                raise ValueError('Retry CSV quality policy differs from this run. Select its original minimum/maximum settings.')
+            retry_targets = saved.get('targets', {})
         summary = process_clips(
             csv_path,
             output_path,
@@ -1195,7 +1438,8 @@ def main() -> None:
             row_sleep_max,
             log_callback=print,
             stop_flag_path=stop_flag_path,
-            max_height=args.max_height,
+            max_height=args.max_height, quality_policy=args.quality_policy,
+            replace_existing=args.replace_existing, retry_targets=retry_targets,
         )
         exit_code = summary.exit_code()
         if exit_code == EXIT_SUCCESS:
