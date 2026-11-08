@@ -92,6 +92,16 @@ app.whenReady().then(async () => {
     const dashboard = extensionWindows.at(-1);
     await waitUntil(() => dashboard.webContents.executeJavaScript(`!!self.vAPI && !!document.querySelector('iframe')`));
     report.checks.push('uBlock dashboard opens with its extension APIs');
+
+    // Test storage reset & re-initialization
+    const resetStatus = await ublock.reset();
+    assert.equal(resetStatus.installed, true, resetStatus.error);
+    report.checks.push('uBlock storage reset cleanly re-initializes filtering engine');
+
+    // Test clean close / shutdown
+    await ublock.close();
+    assert.equal(ublock.extension, null);
+    report.checks.push('uBlock cleanly closes and removes extension on shutdown');
     if (process.argv.includes('--youtube')) {
       // A live playback check complements the deterministic local ad fixtures.
       const viewer = viewers[1];

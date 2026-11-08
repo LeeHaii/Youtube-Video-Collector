@@ -1,14 +1,16 @@
 const { BrowserWindow, webContents } = require('electron');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { installRelease } = require('./ublock-release');
 
 class UBlockOrigin {
-  constructor({ session, directory, bundledDirectory }) {
+  constructor({ session, directory, bundledDirectory, userDataDirectory }) {
     this.session = session;
     this.directory = directory;
     this.bundledDirectory = bundledDirectory;
+    this.userDataDirectory = userDataDirectory || path.resolve(directory, '..', '..');
     this.extension = null;
     this.busy = false;
     this.error = '';
@@ -28,6 +30,21 @@ class UBlockOrigin {
         if (!this.viewers.has(tab.id)) window.close();
       },
     });
+  }
+
+  getId() {
+    if (this.extension?.id) return this.extension.id;
+    try {
+      const existing = this.session?.extensions?.getAllExtensions?.()
+        ?.find(e => e.path === path.resolve(this.directory) || e.name === 'uBlock Origin');
+      if (existing?.id) return existing.id;
+    } catch {}
+    const normalized = path.resolve(this.directory);
+    const encoding = process.platform === 'win32' ? 'utf16le' : 'utf8';
+    const hash = crypto.createHash('sha256').update(Buffer.from(normalized, encoding)).digest();
+    return Array.from(hash.slice(0, 16))
+      .map(b => String.fromCharCode(97 + (b >> 4)) + String.fromCharCode(97 + (b & 0x0f)))
+      .join('');
   }
 
   createExtensionWindow(parent, popup = false) {
@@ -72,10 +89,10 @@ class UBlockOrigin {
         // must not hold the entire application open indefinitely.
         const ready = background && await Promise.race([
           background.executeJavaScript('self.µBlock?.readyToFilter === true').catch(() => false),
-          new Promise(resolve => setTimeout(() => resolve(false), 750)),
+          new Promise(resolve => setTimeout(() => resolve(false), 1500)),
         ]);
         if (ready) { this.extension = extension; this.error = ''; return this.status(); }
-        await new Promise(resolve => setTimeout(resolve, 250));
+        await new Promise(resolve => setTimeout(resolve, 400));
       }
       throw new Error('uBlock filtering engine did not initialize within 35 seconds.');
     } catch (error) {
@@ -84,6 +101,83 @@ class UBlockOrigin {
       this.error = error.message;
       console.warn('uBlock Origin:', error.message);
       return this.status();
+    }
+  }
+
+  async reset() {
+    if (this.busy) return this.status();
+    this.busy = true;
+    this.error = '';
+    try {
+      if (this.extension) {
+        try { this.session.extensions.removeExtension(this.extension.id); } catch {}
+        this.extension = null;
+      }
+      const id = this.getId();
+      const userData = this.userDataDirectory || path.resolve(this.directory, '..', '..');
+
+      // 1. Clear LevelDB Local Extension Settings
+      const localSettingsDir = path.join(userData, 'Local Extension Settings', id);
+      try {
+        await fs.promises.rm(localSettingsDir, { recursive: true, force: true });
+      } catch (err) {
+        if (err.code !== 'ENOENT') console.warn('Could not remove extension storage:', err.message);
+      }
+
+      // 2. Clear Session storage data (IndexedDB, CacheStorage, ServiceWorkers)
+      if (this.session?.clearStorageData) {
+        try {
+          await this.session.clearStorageData({
+            origin: `chrome-extension://${id}`,
+            storages: ['indexdb', 'cachestorage', 'serviceworkers'],
+          });
+        } catch (err) {
+          console.warn('Could not clear extension session storage:', err.message);
+        }
+      }
+
+      // 3. Clear IndexedDB directories on disk if any linger
+      const idbDir = path.join(userData, 'IndexedDB');
+      try {
+        const entries = await fs.promises.readdir(idbDir).catch(() => []);
+        for (const entry of entries) {
+          if (entry.includes(id)) {
+            await fs.promises.rm(path.join(idbDir, entry), { recursive: true, force: true }).catch(() => {});
+          }
+        }
+      } catch {}
+
+      // 4. Reload extension
+      await this.load();
+      if (this.extension) {
+        for (const viewerId of this.viewers) webContents.fromId(viewerId)?.reload();
+      }
+    } catch (err) {
+      this.error = err.message;
+    } finally {
+      this.busy = false;
+    }
+    return this.status();
+  }
+
+  async close() {
+    if (!this.extension) return;
+    try {
+      const extensionId = this.extension.id;
+      const background = webContents.getAllWebContents().find(contents =>
+        contents.getType() === 'backgroundPage' && contents.getURL() === `chrome-extension://${extensionId}/background.html`);
+
+      if (background && !background.isDestroyed()) {
+        await Promise.race([
+          background.executeJavaScript('self.µBlock?.saveLocalSettings?.()').catch(() => {}),
+          new Promise(resolve => setTimeout(resolve, 500)),
+        ]);
+      }
+
+      this.session.extensions.removeExtension(extensionId);
+      this.extension = null;
+    } catch (err) {
+      console.warn('uBlock clean shutdown warning:', err.message);
     }
   }
 
