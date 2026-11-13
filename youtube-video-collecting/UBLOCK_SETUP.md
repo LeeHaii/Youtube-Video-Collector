@@ -44,6 +44,7 @@ together, rerun setup, and repeat the Electron smoke test.
 ```powershell
 npm run test:ublock
 .\node_modules\electron\dist\electron.exe tools/test-ublock-electron.js
+node tools/test-ublock-restore.js
 ```
 
 The integration test uses a disposable profile and local server. It checks real

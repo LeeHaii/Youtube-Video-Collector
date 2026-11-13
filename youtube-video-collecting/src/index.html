@@ -588,26 +588,26 @@
       <div class="settings-modal-body">
         <div class="settings-section">
           <label class="settings-label">YouTube ad blocking</label>
-          <p id="ublock-status" role="status" aria-live="polite">Checking uBlock Origin…</p>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
-            <button id="ublock-install-btn" class="settings-btn-secondary" disabled>Install uBlock Origin</button>
-            <button id="ublock-settings-btn" class="settings-btn-secondary" disabled>uBlock settings</button>
-            <button id="ublock-reset-btn" class="settings-btn-secondary" disabled>Reset uBlock storage</button>
+          <p id="ublock-status" class="settings-status" role="status" aria-live="polite">Checking uBlock Origin…</p>
+          <div class="settings-row">
+            <button id="ublock-install-btn" class="settings-btn-inline" disabled>Install uBlock Origin</button>
+            <button id="ublock-settings-btn" class="settings-btn-inline" disabled>uBlock settings</button>
+            <button id="ublock-reset-btn" class="settings-btn-inline danger" disabled>Reset uBlock storage</button>
           </div>
-          <p class="settings-hint">Installs the official uBlock Origin extension from GitHub. Use Reset if the filtering engine hangs or runs out of space.</p>
+          <p class="settings-hint">Installs the official uBlock Origin extension from GitHub. Use Reset if the filtering engine hangs: it restarts the app and rebuilds uBlock's cache. Your whitelist and custom filters are kept.</p>
         </div>
         <!-- YouTube Filter & API Key Setting -->
         <div class="settings-section">
-          <label class="settings-label">YouTube Filter &amp; API Key</label>
-          <div class="settings-input-group" style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
-            <input type="password" id="youtube-api-key-input" class="settings-input" placeholder="AIzaSy... (YouTube Data API v3 Key)" style="flex: 1;" />
-            <button type="button" id="toggle-api-key-visibility-btn" class="settings-btn-secondary" style="padding: 8px 12px; white-space: nowrap;">👁 Show</button>
-            <button type="button" id="test-api-key-btn" class="settings-btn-secondary" style="padding: 8px 14px; white-space: nowrap;">Test Key</button>
+          <label class="settings-label" for="youtube-api-key-input">YouTube Filter &amp; API Key</label>
+          <div class="settings-row">
+            <input type="password" id="youtube-api-key-input" class="settings-input" placeholder="AIzaSy... (YouTube Data API v3 Key)" />
+            <button type="button" id="toggle-api-key-visibility-btn" class="settings-btn-inline">👁 Show</button>
+            <button type="button" id="test-api-key-btn" class="settings-btn-inline">Test Key</button>
           </div>
           <p id="youtube-api-key-status" class="settings-hint">Enter your Google Cloud YouTube Data API v3 key to enable subscriber, upload date, and resolution filtering.</p>
-          <div style="margin-top: 8px; display: flex; gap: 10px; align-items: center; justify-content: space-between;">
-            <span id="filter-quota-status" style="font-size: 12px; color: #64748b;"></span>
-            <button type="button" id="clear-filter-cache-btn" class="settings-btn-secondary" style="font-size: 12px; padding: 4px 10px;">Clear Cache</button>
+          <div class="settings-row settings-row-split">
+            <span id="filter-quota-status" class="settings-hint"></span>
+            <button type="button" id="clear-filter-cache-btn" class="settings-btn-inline">Clear Cache</button>
           </div>
         </div>
 

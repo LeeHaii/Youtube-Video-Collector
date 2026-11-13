@@ -199,7 +199,11 @@ ipcMain.handle('ublock-install', async (event) => {
 });
 ipcMain.handle('ublock-reset', async (event) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized uBlock request');
-  return ublock.reset();
+  await ublock.requestReset();
+  // Extension storage stays open until exit; the wipe runs on the next startup.
+  app.relaunch();
+  app.quit();
+  return { busy: true, message: 'Restarting to reset uBlock storage…' };
 });
 ipcMain.handle('ublock-open', async (event, viewerId) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized uBlock request');
