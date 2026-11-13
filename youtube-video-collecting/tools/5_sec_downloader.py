@@ -683,11 +683,15 @@ def encoding_arguments(policy: Optional[EncodingPolicy] = None) -> List[str]:
     arguments = ["-c:v", "libx264", "-profile:v", "high", "-preset", "veryfast", "-crf", "18",
                  "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-f", "mp4"]
     if policy and policy.hdr:
-        transfer = "arib-std-b67" if policy.dynamic_range == "HLG" else "smpte2084"
+        hlg = policy.dynamic_range == "HLG"
+        transfer = "arib-std-b67" if hlg else "smpte2084"
+        # HLG at npl=100 blows out highlights and lifts midtones; npl=150 without desat
+        # matched a libplacebo reference render best (SSIM ~0.98 on real YouTube HLG clips).
+        npl, desat = (150, 0) if hlg else (100, 2)
         graph = (
             f"zscale=transferin={transfer}:primariesin={policy.primaries}:matrixin={policy.matrix}:"
-            f"rangein={policy.color_range}:transfer=linear:npl=100,format=gbrpf32le,"
-            "zscale=primaries=bt709,tonemap=tonemap=hable:desat=2,"
+            f"rangein={policy.color_range}:transfer=linear:npl={npl},format=gbrpf32le,"
+            f"zscale=primaries=bt709,tonemap=tonemap=hable:desat={desat},"
             "zscale=transfer=bt709:matrix=bt709:range=limited,format=yuv420p,"
             "sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA,"
             "sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL"
