@@ -20,6 +20,10 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(args[args.index("-pix_fmt") + 1], "yuv420p")
         self.assertIn("transferin=arib-std-b67", args[args.index("-vf") + 1])
         self.assertIn("tonemap=", args[args.index("-vf") + 1])
+        # HLG must not use the PQ linearization that washed out real clips.
+        self.assertIn("npl=150", args[args.index("-vf") + 1])
+        pq = downloader.encoding_arguments(downloader.EncodingPolicy(3840, 2160, 60, "PQ", True))
+        self.assertIn("npl=100", pq[pq.index("-vf") + 1])
         self.assertNotIn("-r", args)
         self.assertNotIn("-level", args)
         self.assertNotIn("fps=", args[args.index("-vf") + 1])
