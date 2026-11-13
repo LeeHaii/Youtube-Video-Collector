@@ -108,6 +108,12 @@ const settingsSaveBtn = document.querySelector('#settings-save-btn');
 const settingsCancelBtn = document.querySelector('#settings-cancel-btn');
 const autosaveIntervalInput = document.querySelector('#autosave-interval-input');
 const markingMethodToggle = document.querySelector('#marking-method-toggle');
+const youtubeApiKeyInput = document.querySelector('#youtube-api-key-input');
+const toggleApiKeyVisibilityBtn = document.querySelector('#toggle-api-key-visibility-btn');
+const testApiKeyBtn = document.querySelector('#test-api-key-btn');
+const youtubeApiKeyStatus = document.querySelector('#youtube-api-key-status');
+const filterQuotaStatus = document.querySelector('#filter-quota-status');
+const clearFilterCacheBtn = document.querySelector('#clear-filter-cache-btn');
 
 console.log('✅ DOM elements loaded');
 
@@ -132,6 +138,67 @@ console.log('✅ Button listeners attached');
 settingsCloseBtn.addEventListener('click', closeSettings);
 settingsSaveBtn.addEventListener('click', saveSettings);
 settingsCancelBtn.addEventListener('click', closeSettings);
+
+// YouTube Filter Settings Listeners
+if (toggleApiKeyVisibilityBtn && youtubeApiKeyInput) {
+  toggleApiKeyVisibilityBtn.addEventListener('click', () => {
+    const isPass = youtubeApiKeyInput.type === 'password';
+    youtubeApiKeyInput.type = isPass ? 'text' : 'password';
+    toggleApiKeyVisibilityBtn.textContent = isPass ? '🔒 Hide' : '👁 Show';
+  });
+}
+
+if (testApiKeyBtn && youtubeApiKeyInput) {
+  testApiKeyBtn.addEventListener('click', async () => {
+    const key = youtubeApiKeyInput.value.trim();
+    if (!key) {
+      if (youtubeApiKeyStatus) {
+        youtubeApiKeyStatus.textContent = '⚠️ Please enter an API key to test.';
+        youtubeApiKeyStatus.style.color = '#e11d48';
+      }
+      return;
+    }
+    testApiKeyBtn.disabled = true;
+    if (youtubeApiKeyStatus) {
+      youtubeApiKeyStatus.textContent = '⏳ Testing API key with YouTube Data API v3...';
+      youtubeApiKeyStatus.style.color = '#2563eb';
+    }
+    try {
+      const res = await window.electronAPI?.testLytKey?.(key);
+      if (res && res.ok && res.valid) {
+        if (youtubeApiKeyStatus) {
+          youtubeApiKeyStatus.textContent = '✅ API key is valid and working! (used 1 quota unit)';
+          youtubeApiKeyStatus.style.color = '#16a34a';
+        }
+      } else {
+        const msg = (res && res.message) || (res && res.error) || 'Invalid key or quota exceeded.';
+        if (youtubeApiKeyStatus) {
+          youtubeApiKeyStatus.textContent = '❌ ' + msg;
+          youtubeApiKeyStatus.style.color = '#e11d48';
+        }
+      }
+      loadFilterQuotaDisplay();
+    } catch (err) {
+      if (youtubeApiKeyStatus) {
+        youtubeApiKeyStatus.textContent = '❌ Test error: ' + err.message;
+        youtubeApiKeyStatus.style.color = '#e11d48';
+      }
+    } finally {
+      testApiKeyBtn.disabled = false;
+    }
+  });
+}
+
+if (clearFilterCacheBtn) {
+  clearFilterCacheBtn.addEventListener('click', async () => {
+    try {
+      const res = await window.electronAPI?.clearLytCache?.();
+      showNotification(`🧹 Cleared filter cache (${res?.removed || 0} entries)`);
+    } catch (err) {
+      console.warn('Clear cache error:', err);
+    }
+  });
+}
 
 // Credit Facebook Link
 const creditFacebookLink = document.querySelector('#credit-facebook-link');
@@ -201,12 +268,57 @@ setInterval(() => {
 youtubeWebview.addEventListener('dom-ready', () => {
   console.log('✨ WebView DOM ready, injecting scripts...');
   injectScripts();
+  injectYouTubeFilter();
   // setupPolling(); // Already set up with setInterval below
   updateUrlDisplay();
   console.log('✨ Scripts injected successfully');
 });
 
 // Inject scripts into webview
+let filterAssetsCached = null;
+
+async function injectYouTubeFilter() {
+  if (!youtubeWebview) return;
+  try {
+    if (!filterAssetsCached) {
+      filterAssetsCached = await window.electronAPI?.getFilterAssets?.();
+    }
+    if (filterAssetsCached) {
+      if (filterAssetsCached.css && youtubeWebview.insertCSS) {
+        await youtubeWebview.insertCSS(filterAssetsCached.css).catch(() => {});
+      }
+      if (filterAssetsCached.js && youtubeWebview.executeJavaScript) {
+        await youtubeWebview.executeJavaScript(filterAssetsCached.js).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.warn('[YouTube Filter] Injection warning:', err);
+  }
+}
+
+if (youtubeWebview && youtubeWebview.addEventListener) {
+  youtubeWebview.addEventListener('console-message', async (e) => {
+    if (e.message && e.message.startsWith('__LYT_REQ__')) {
+      try {
+        const { reqId, msg } = JSON.parse(e.message.slice(11));
+        if (msg && msg.type === 'openOptions') {
+          openSettings();
+          if (youtubeWebview.executeJavaScript) {
+            youtubeWebview.executeJavaScript(`if (window.__lytReply) window.__lytReply(${reqId}, { ok: true });`).catch(() => {});
+          }
+          return;
+        }
+        const response = await window.electronAPI?.lytMessage?.(msg);
+        if (youtubeWebview.executeJavaScript) {
+          youtubeWebview.executeJavaScript(`if (window.__lytReply) window.__lytReply(${reqId}, ${JSON.stringify(response)});`).catch(() => {});
+        }
+      } catch (err) {
+        console.warn('[YouTube Filter] Error handling console message:', err);
+      }
+    }
+  });
+}
+
 function injectScripts() {
   // Inject a keydown listener into the YouTube page
   const keyListenerScript = `
@@ -1019,10 +1131,35 @@ async function loadRowData() {
 /**
  * Open the settings modal and load current settings
  */
+async function loadFilterSettings() {
+  try {
+    const data = await window.electronAPI?.getLytSettings?.();
+    if (data && data.cfg && youtubeApiKeyInput) {
+      youtubeApiKeyInput.value = data.cfg.apiKey || '';
+    }
+    loadFilterQuotaDisplay(data?.quota);
+  } catch (err) {
+    console.warn('Failed to load filter settings:', err);
+  }
+}
+
+async function loadFilterQuotaDisplay(preloadedQuota) {
+  if (!filterQuotaStatus) return;
+  try {
+    const q = preloadedQuota || (await window.electronAPI?.getLytQuota?.())?.quota;
+    if (q) {
+      filterQuotaStatus.textContent = `Today: ${q.units || 0} / 10,000 units`;
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
 function openSettings() {
   console.log('⚙️ Opening settings modal');
   autosaveIntervalInput.value = autosaveInterval;
   markingMethodToggle.checked = offsetMarkingEnabled;
+  loadFilterSettings();
   settingsModal.classList.add('active');
 }
 
@@ -1066,6 +1203,12 @@ function saveSettings() {
   startAutosaveInterval();
 
   // Show confirmation
+  // Save API key
+  if (youtubeApiKeyInput) {
+    const newApiKey = youtubeApiKeyInput.value.trim();
+    window.electronAPI?.saveLytSettings?.({ apiKey: newApiKey }).catch((e) => console.warn(e));
+  }
+
   showNotification(`⚙️ Settings saved! Autosave: ${autosaveInterval}m | Offset marking: ${offsetMarkingEnabled ? 'ON' : 'OFF'}`);
   
   closeSettings();

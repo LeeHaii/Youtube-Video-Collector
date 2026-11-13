@@ -1480,6 +1480,79 @@ webview#trimmer-webview {
   transform: scale(0.98);
 }
 
+/* Compact buttons and rows inside settings sections (footer keeps the large ones). */
+.settings-status {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #2d3748;
+}
+
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-row > .settings-input {
+  flex: 1;
+  min-width: 180px;
+  width: auto;
+}
+
+.settings-row-split {
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.settings-row-split .settings-hint {
+  margin: 0;
+}
+
+.settings-btn-inline {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #2d3748;
+  background-color: #fff;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.settings-btn-inline:hover:not(:disabled) {
+  background-color: #f7fafc;
+  border-color: #a0aec0;
+}
+
+.settings-btn-inline:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.25);
+}
+
+.settings-btn-inline:disabled {
+  color: #a0aec0;
+  background-color: #f7fafc;
+  cursor: default;
+}
+
+.settings-btn-inline.danger {
+  color: #c53030;
+  border-color: #feb2b2;
+}
+
+.settings-btn-inline.danger:hover:not(:disabled) {
+  background-color: #fff5f5;
+  border-color: #fc8181;
+}
+
+.settings-btn-inline.danger:disabled {
+  color: #e8a5a5;
+  border-color: #fed7d7;
+}
+
 /* Animations */
 @keyframes fadeIn {
   from {

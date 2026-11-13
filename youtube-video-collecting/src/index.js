@@ -18,6 +18,8 @@ const {
 
 const { verifyDownloader } = require('./downloader-runtime');
 const { StringDecoder } = require('node:string_decoder');
+const { YoutubeFilterService } = require('./youtube-filter-service');
+let youtubeFilterService = null;
 
 // Suppress MaxListenersExceededWarning
 require('events').EventEmitter.defaultMaxListeners = 15;
@@ -195,6 +197,14 @@ ipcMain.handle('ublock-install', async (event) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized uBlock request');
   return ublock.install();
 });
+ipcMain.handle('ublock-reset', async (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized uBlock request');
+  await ublock.requestReset();
+  // Extension storage stays open until exit; the wipe runs on the next startup.
+  app.relaunch();
+  app.quit();
+  return { busy: true, message: 'Restarting to reset uBlock storage…' };
+});
 ipcMain.handle('ublock-open', async (event, viewerId) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized uBlock request');
   try { await ublock.open(mainWindow, viewerId); return { success: true }; }
@@ -242,7 +252,20 @@ ipcMain.on('collector-open-result', (event, requestId, result) => {
   const pending = collectorOpenRequests.get(requestId);
   if (pending?.sender === event.sender) pending.finish(result);
 });
-app.on('before-quit', () => { void collectorBridge?.close(); });
+let isQuitting = false;
+app.on('before-quit', async (event) => {
+  if (isQuitting) return;
+  isQuitting = true;
+  event.preventDefault();
+  try {
+    if (collectorBridge) await collectorBridge.close();
+    if (ublock) await ublock.close();
+  } catch (error) {
+    console.warn('App clean shutdown warning:', error.message);
+  } finally {
+    app.quit();
+  }
+});
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
@@ -266,6 +289,13 @@ app.whenReady().then(async () => {
     } catch (error) { console.warn('Collector browser bridge:', error.message); }
   }
   console.log('🚀 Creating main application window...');
+  youtubeFilterService = new YoutubeFilterService({
+    userDataPath: app.getPath('userData'),
+    bundledSharedPath: app.isPackaged
+      ? path.join(process.resourcesPath, 'cau-hinh-chung.json')
+      : path.join(__dirname, 'cau-hinh-chung.json'),
+  });
+  youtubeFilterService.prune();
   mainWindow = createWindow();
   mainWindow.webContents.on('did-start-loading', () => collectorBridge?.setReady(false));
   mainWindow.on('closed', () => collectorBridge?.setReady(false));
@@ -1085,6 +1115,38 @@ ipcMain.handle('process-effect-title', async (event, projectPaths, addEffect, ad
 ipcMain.on('webview-message', (event, { channel, args }) => {
   // Forward messages from webview to renderer
   mainWindow.webContents.send(channel, ...args);
+});
+
+// YouTube Filter IPC Handlers
+ipcMain.handle('lyt-message', async (_event, msg) => {
+  return youtubeFilterService ? await youtubeFilterService.handleMessage(msg) : { ok: false, error: 'NO_SERVICE' };
+});
+ipcMain.handle('lyt-get-assets', async () => {
+  return youtubeFilterService ? youtubeFilterService.getAssets() : { css: '', js: '' };
+});
+ipcMain.handle('lyt-get-settings', async () => {
+  if (!youtubeFilterService) return { cfg: null, quota: null };
+  return { cfg: youtubeFilterService.getCfg(), quota: youtubeFilterService.readQuota() };
+});
+ipcMain.handle('lyt-save-settings', async (_event, patch) => {
+  if (!youtubeFilterService) return { success: false };
+  const updatedCfg = youtubeFilterService.saveCfg(patch);
+  return { success: true, cfg: updatedCfg };
+});
+ipcMain.handle('lyt-test-key', async (_event, key) => {
+  if (!youtubeFilterService) return { ok: false, error: 'NO_SERVICE' };
+  try {
+    const res = await youtubeFilterService.testKey(key);
+    return Object.assign({ ok: true }, res);
+  } catch (err) {
+    return { ok: false, error: err.code || 'LOI', message: err.message };
+  }
+});
+ipcMain.handle('lyt-clear-cache', async () => {
+  return youtubeFilterService ? Object.assign({ ok: true }, youtubeFilterService.clearCache()) : { ok: false };
+});
+ipcMain.handle('lyt-get-quota', async () => {
+  return youtubeFilterService ? { ok: true, quota: youtubeFilterService.readQuota() } : { ok: false };
 });
 
 ipcMain.handle('get-webview-cookies', async (event, webContentsId, url) => {

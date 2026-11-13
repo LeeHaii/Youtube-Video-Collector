@@ -7,6 +7,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   getUBlockStatus: () => ipcRenderer.invoke('ublock-status'),
   installUBlock: () => ipcRenderer.invoke('ublock-install'),
+  resetUBlock: () => ipcRenderer.invoke('ublock-reset'),
   openUBlock: (viewerId) => ipcRenderer.invoke('ublock-open', viewerId),
   // YouTube Collector - Export CSV
   exportCSV: (rows) => ipcRenderer.invoke('export-csv', rows),
@@ -34,6 +35,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // YouTube Trimmer APIs
   trimYouTubeVideo: (url, startSeconds, endSeconds, outputPath, cookieHeader) => ipcRenderer.invoke('trim-youtube-video', url, startSeconds, endSeconds, outputPath, cookieHeader),
   getWebviewCookies: (webContentsId, url) => ipcRenderer.invoke('get-webview-cookies', webContentsId, url),
+
+  // YouTube Filter APIs
+  getFilterAssets: () => ipcRenderer.invoke('lyt-get-assets'),
+  lytMessage: (msg) => ipcRenderer.invoke('lyt-message', msg),
+  getLytSettings: () => ipcRenderer.invoke('lyt-get-settings'),
+  saveLytSettings: (patch) => ipcRenderer.invoke('lyt-save-settings', patch),
+  testLytKey: (key) => ipcRenderer.invoke('lyt-test-key', key),
+  clearLytCache: () => ipcRenderer.invoke('lyt-clear-cache'),
+  getLytQuota: () => ipcRenderer.invoke('lyt-get-quota'),
 
   // YouTube Collector - Load/Save
   openLoadDialog: () => ipcRenderer.invoke('open-load-dialog'),
@@ -72,6 +82,3 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('trim-log', (event, message) => callback(message));
   },
 });
-
-
-

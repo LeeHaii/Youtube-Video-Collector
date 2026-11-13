@@ -27,11 +27,27 @@ function finish(error) {
 app.whenReady().then(async () => {
   try {
     const ublock = new UBlockOrigin({ session: session.defaultSession,
-      directory: path.join(profile, 'extension'), bundledDirectory: path.join(runtime, 'ublock-origin') });
+      directory: path.join(profile, 'extension'), bundledDirectory: path.join(runtime, 'ublock-origin'),
+      userDataDirectory: profile });
     const parent = new BrowserWindow({ show: false, webPreferences: {
       webviewTag: true, nodeIntegration: true, contextIsolation: true } });
+    // Storage must be wiped before load: on a requested reset, and when bloated.
+    const storage = path.join(profile, 'Local Extension Settings', ublock.getId());
+    fs.mkdirSync(storage, { recursive: true });
+    fs.writeFileSync(path.join(storage, 'stale.ldb'), 'x');
+    await ublock.requestReset();
+    await ublock.wipeStorageIfNeeded();
+    assert.equal(fs.existsSync(storage) || fs.existsSync(ublock.resetMarker), false);
+    fs.mkdirSync(storage, { recursive: true });
+    fs.writeFileSync(path.join(storage, 'bloated.log'), '');
+    fs.truncateSync(path.join(storage, 'bloated.log'), 201 * 1024 * 1024);
     const status = await ublock.load();
+    assert.equal(fs.existsSync(path.join(storage, 'bloated.log')), false);
+    report.checks.push('Requested reset and bloated storage are wiped before the extension loads');
     assert.equal(status.installed, true, status.error);
+    await ublock.ready;
+    assert.equal(ublock.status().starting, false);
+    assert.equal(ublock.status().error, '');
     report.checks.push(`Official uBlock Origin ${status.version} filtering engine initialized`);
     const background = webContents.getAllWebContents().find(wc => wc.getType() === 'backgroundPage');
     await background.executeJavaScript(`self.µBlock.appendUserFilters('/ublock-blocked.js$script\\n127.0.0.1##.ad-fixture')`);
@@ -92,6 +108,11 @@ app.whenReady().then(async () => {
     const dashboard = extensionWindows.at(-1);
     await waitUntil(() => dashboard.webContents.executeJavaScript(`!!self.vAPI && !!document.querySelector('iframe')`));
     report.checks.push('uBlock dashboard opens with its extension APIs');
+
+    // Test clean close / shutdown
+    await ublock.close();
+    assert.equal(ublock.extension, null);
+    report.checks.push('uBlock cleanly closes and removes extension on shutdown');
     if (process.argv.includes('--youtube')) {
       // A live playback check complements the deterministic local ad fixtures.
       const viewer = viewers[1];

@@ -14,7 +14,8 @@
     "build-exe": "node build-executables.js",
     "setup:ublock": "node tools/setup-ublock.js",
     "test:ublock": "node --test tests/test_ublock_release.js",
-    "test:downloader": "node --test tests/test_downloader_options.js tests/test_downloader_summary.js tests/test_downloader_runtime.js"
+    "test:downloader": "node --test tests/test_downloader_options.js tests/test_downloader_summary.js tests/test_downloader_runtime.js",
+    "test:filter": "node --test tests/test_youtube_filter.js"
   },
   "keywords": [],
   "author": {
